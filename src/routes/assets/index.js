@@ -9,7 +9,6 @@ const router = express.Router();
 router.post("/user/assets", checkAuth, (req, res) => {
   const { buildingId, isCreated, isForbidden, isRotate, isDestroyed, x, y } =
     req.body;
-  console.log("HELLO", req.body);
   if (
     buildingId === undefined ||
     isCreated === undefined ||

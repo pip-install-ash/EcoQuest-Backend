@@ -34,10 +34,9 @@ router.post("/create", checkAuth, async (req, res) => {
   }
 });
 
-// Get and update league by userID
-router.post("/get-update/:userID", checkAuth, async (req, res) => {
+// Get league by userID
+router.get("/get/:userID", checkAuth, async (req, res) => {
   const { userID } = req.params;
-  const { updateData } = req.body;
 
   if (!userID) {
     return res.status(400).json(createResponse(false, "Missing userID", null));
@@ -58,20 +57,89 @@ router.post("/get-update/:userID", checkAuth, async (req, res) => {
     }
 
     const league = snapshot.docs[0];
-    if (updateData) {
-      await league.ref.update(updateData);
-    }
 
     res.status(200).json(
-      createResponse(true, "League retrieved and updated successfully", {
+      createResponse(true, "League retrieved successfully", {
         id: league.id,
         data: league.data(),
       })
     );
   } catch (error) {
+    res.status(500).json(createResponse(false, "Failed to get league", null));
+  }
+});
+
+// Add user to league
+router.post("/add-user-to-league", checkAuth, async (req, res) => {
+  const { userID, leagueID } = req.body;
+
+  if (!userID || !leagueID) {
+    return res
+      .status(400)
+      .json(createResponse(false, "Missing userID or leagueID", null));
+  }
+
+  try {
+    const leagueRef = admin.firestore().collection("leagues").doc(leagueID);
+    const leagueDoc = await leagueRef.get();
+
+    if (!leagueDoc.exists) {
+      return res
+        .status(404)
+        .json(
+          createResponse(false, "No league found for the given leagueID", null)
+        );
+    }
+
+    await leagueRef.update({
+      userIDs: admin.firestore.FieldValue.arrayUnion(userID),
+    });
+
+    res
+      .status(200)
+      .json(createResponse(true, "User added to league successfully", null));
+  } catch (error) {
     res
       .status(500)
-      .json(createResponse(false, "Failed to get or update league", null));
+      .json(createResponse(false, "Failed to add user to league", null));
+  }
+});
+
+// Remove user from league
+router.post("/remove-user-from-league", checkAuth, async (req, res) => {
+  const { userID, leagueID } = req.body;
+
+  if (!userID || !leagueID) {
+    return res
+      .status(400)
+      .json(createResponse(false, "Missing userID or leagueID", null));
+  }
+
+  try {
+    const leagueRef = admin.firestore().collection("leagues").doc(leagueID);
+    const leagueDoc = await leagueRef.get();
+
+    if (!leagueDoc.exists) {
+      return res
+        .status(404)
+        .json(
+          createResponse(false, "No league found for the given leagueID", null)
+        );
+    }
+
+    await leagueRef.update({
+      userIDs: admin.firestore.FieldValue.arrayRemove(userID),
+    });
+
+    res
+      .status(200)
+      .json(
+        createResponse(true, "User removed from league successfully", null)
+      );
+  } catch (error) {
+    res
+      .status(500)
+      .json(createResponse(false, "Failed to remove user from league", null));
   }
 });
 

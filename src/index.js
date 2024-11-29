@@ -4,6 +4,7 @@ const serviceAccount = require("./keys.json");
 const assetRoutes = require("./routes/assets");
 const pointsRoutes = require("./routes/points");
 const leagueRoutes = require("./routes/league");
+const userRoutes = require("./routes/users");
 const checkAuth = require("./middleware/authentication");
 
 admin.initializeApp({
@@ -20,32 +21,41 @@ app.get("/", (req, res) => {
 });
 
 // Register new user
-app.post("/register", (req, res) => {
-  const { email, password } = req.body;
+app.post("/register", async (req, res) => {
+  const { userName, email, password } = req.body;
 
-  if (!email || !password) {
-    return res
-      .status(500)
-      .json({ message: "Email and password are required", success: false });
+  if (!userName || !email || !password) {
+    return res.status(400).json({
+      message: "Username, email and password are required",
+      success: false,
+    });
   }
 
-  admin
-    .auth()
-    .createUser({
+  try {
+    // Create a new user in Firebase Authentication
+    const userRecord = await admin.auth().createUser({
       email,
       password,
-    })
-    .then((userRecord) => {
-      console.log("Successfully created user:", userRecord.uid);
-      return res.json({
-        message: "User registered successfully",
-        success: true,
-      });
-    })
-    .catch((error) => {
-      console.error("Error creating user:", error);
-      res.status(500).json({ message: error.message, success: false });
     });
+
+    console.log("Successfully created user:", userRecord.uid);
+
+    // Add user profile to Firestore in the userProfiles collection
+    await admin.firestore().collection("userProfiles").doc(userRecord.uid).set({
+      userID: userRecord.uid,
+      userName,
+      email,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return res.status(201).json({
+      message: "User registered and profile created successfully",
+      success: true,
+    });
+  } catch (error) {
+    console.error("Error creating user or profile:", error);
+    return res.status(500).json({ message: error.message, success: false });
+  }
 });
 
 // Log in a user
@@ -57,8 +67,6 @@ app.post("/login", (req, res) => {
       .status(500)
       .json({ message: "Email and password are required", success: false });
   }
-
-  console.log("email", email, "password", password);
 
   admin
     .auth()
@@ -97,7 +105,8 @@ app.get("/logout", (req, res) => {
 
 app.use("/api", assetRoutes);
 app.use("/api/points", pointsRoutes);
-app.use("/api/league", leagueRoutes);
+app.use("/api/leagues", leagueRoutes);
+app.use("/api/users", userRoutes);
 
 // Create a new asset with additional data (requires authentication)
 app.post("/buildings/new", checkAuth, (req, res) => {

@@ -10,8 +10,6 @@ router.post("/create", checkAuth, async (req, res) => {
   const { userID, ecoPoints, coins, garbage, population, electricity, water } =
     req.body;
   try {
-    console.log(req.body);
-
     await admin.firestore().collection("points").doc(userID).set({
       userID,
       ecoPoints,
