@@ -22,6 +22,14 @@ router.post("/create", checkAuth, async (req, res) => {
   }
 
   try {
+    let joiningCode = null;
+
+    // Generate a joining code if the league is private
+    if (isPrivate) {
+      joiningCode = Math.floor(100000 + Math.random() * 900000).toString();
+    }
+
+    // Create the league document
     const leagueRef = await admin
       .firestore()
       .collection("leagues")
@@ -31,6 +39,7 @@ router.post("/create", checkAuth, async (req, res) => {
         userIDs,
         createdBy,
         isPrivate: isPrivate || false,
+        joiningCode, // Add the joining code if applicable
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
@@ -40,6 +49,7 @@ router.post("/create", checkAuth, async (req, res) => {
       })
     );
   } catch (error) {
+    console.error("Error creating league:", error);
     res
       .status(500)
       .json(createResponse(false, "Failed to create league", null));
@@ -223,6 +233,117 @@ router.get("/all-leagues-with-points", checkAuth, async (req, res) => {
     res
       .status(500)
       .json(createResponse(false, "Failed to get leagues with points", null));
+  }
+});
+
+// Join private league
+router.post("/join-private-league", checkAuth, async (req, res) => {
+  const { joiningCode, userID } = req.body;
+
+  if (!joiningCode || !userID) {
+    return res
+      .status(400)
+      .json(createResponse(false, "Missing joiningCode or userID", null));
+  }
+
+  try {
+    const leaguesRef = admin.firestore().collection("leagues");
+    const snapshot = await leaguesRef
+      .where("joiningCode", "==", joiningCode)
+      .get();
+
+    if (snapshot.empty) {
+      return res
+        .status(404)
+        .json(
+          createResponse(
+            false,
+            "No league found with the given joiningCode",
+            null
+          )
+        );
+    }
+
+    const leagueDoc = snapshot.docs[0];
+    const leagueData = leagueDoc.data();
+
+    if (leagueData.userIDs.includes(userID)) {
+      return res
+        .status(400)
+        .json(createResponse(false, "User already in the league", null));
+    }
+
+    if (leagueData.userIDs.length >= leagueData.numberOfPlayers) {
+      return res
+        .status(400)
+        .json(createResponse(false, "League is already full", null));
+    }
+
+    await leagueDoc.ref.update({
+      userIDs: admin.firestore.FieldValue.arrayUnion(userID),
+    });
+
+    res
+      .status(200)
+      .json(
+        createResponse(true, "User joined private league successfully", null)
+      );
+  } catch (error) {
+    res
+      .status(500)
+      .json(createResponse(false, "Failed to join private league", null));
+  }
+});
+
+// Join public league
+router.post("/join-public-league", checkAuth, async (req, res) => {
+  const { leagueID, userID } = req.body;
+
+  if (!leagueID || !userID) {
+    return res
+      .status(400)
+      .json(createResponse(false, "Missing leagueID or userID", null));
+  }
+
+  try {
+    const leagueRef = admin.firestore().collection("leagues").doc(leagueID);
+    const leagueDoc = await leagueRef.get();
+
+    if (!leagueDoc.exists) {
+      return res
+        .status(404)
+        .json(
+          createResponse(false, "No league found with the given leagueID", null)
+        );
+    }
+
+    const leagueData = leagueDoc.data();
+
+    if (leagueData.userIDs.includes(userID)) {
+      return res
+        .status(400)
+        .json(createResponse(false, "User already in the league", null));
+    }
+
+    if (leagueData.userIDs.length >= leagueData.numberOfPlayers) {
+      return res
+        .status(400)
+        .json(createResponse(false, "League is already full", null));
+    }
+
+    await leagueRef.update({
+      userIDs: admin.firestore.FieldValue.arrayUnion(userID),
+    });
+
+    res
+      .status(200)
+      .json(
+        createResponse(true, "User joined public league successfully", null)
+      );
+  } catch (error) {
+    res
+      .status(500)
+      .json(createResponse(false, "Failed to join public league", null));
   }
 });
 
