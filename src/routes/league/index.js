@@ -7,20 +7,32 @@ const router = express.Router();
 
 // Create league
 router.post("/create", checkAuth, async (req, res) => {
-  const { userIDs, createdBy } = req.body;
+  const {
+    leagueName,
+    numberOfPlayers,
+    userIDs = [],
+    createdBy,
+    isPrivate,
+  } = req.body;
 
-  if (!userIDs || !createdBy) {
+  if (!createdBy) {
     return res
       .status(400)
       .json(createResponse(false, "Missing required fields", null));
   }
 
   try {
-    const leagueRef = await admin.firestore().collection("leagues").add({
-      userIDs,
-      createdBy,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    const leagueRef = await admin
+      .firestore()
+      .collection("leagues")
+      .add({
+        leagueName,
+        numberOfPlayers,
+        userIDs,
+        createdBy,
+        isPrivate: isPrivate || false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
     res.status(201).json(
       createResponse(true, "League created successfully", {
@@ -91,6 +103,19 @@ router.post("/add-user-to-league", checkAuth, async (req, res) => {
         );
     }
 
+    const leagueData = leagueDoc.data();
+    if (leagueData.userIDs.includes(userID)) {
+      return res
+        .status(400)
+        .json(createResponse(false, "User already in the league", null));
+    }
+
+    if (leagueData.userIDs.length >= leagueData.numberOfPlayers) {
+      return res
+        .status(400)
+        .json(createResponse(false, "League is already full", null));
+    }
+
     await leagueRef.update({
       userIDs: admin.firestore.FieldValue.arrayUnion(userID),
     });
@@ -140,6 +165,64 @@ router.post("/remove-user-from-league", checkAuth, async (req, res) => {
     res
       .status(500)
       .json(createResponse(false, "Failed to remove user from league", null));
+  }
+});
+
+// Get all leagues with connected points against userIDs
+router.get("/all-leagues-with-points", checkAuth, async (req, res) => {
+  try {
+    const leaguesRef = admin.firestore().collection("leagues");
+    const snapshot = await leaguesRef.get();
+
+    if (snapshot.empty) {
+      return res
+        .status(404)
+        .json(createResponse(false, "No leagues found", null));
+    }
+
+    const leagues = [];
+    for (const doc of snapshot.docs) {
+      const leagueData = doc.data();
+      const userPointsPromises = leagueData.userIDs.map(async (userID) => {
+        const pointsRef = admin.firestore().collection("points").doc(userID);
+        const pointsDoc = await pointsRef.get();
+        return {
+          userID,
+          ecoPoints: pointsDoc.exists ? pointsDoc.data().ecoPoints : 0,
+          pointsDoc: pointsDoc.exists ? pointsDoc.data() : null,
+        };
+      });
+
+      const userPoints = await Promise.all(userPointsPromises);
+      const totalPoints = userPoints.reduce(
+        (acc, user) => acc + user.ecoPoints,
+        0
+      );
+      const averagePoints = userPoints.length
+        ? totalPoints / userPoints.length
+        : 0;
+
+      leagues.push({
+        id: doc.id,
+        data: leagueData,
+        averageEcoPoints: averagePoints,
+        userPoints,
+      });
+    }
+
+    res
+      .status(200)
+      .json(
+        createResponse(
+          true,
+          "Leagues with average ecoPoints and points documents retrieved successfully",
+          leagues
+        )
+      );
+  } catch (error) {
+    res
+      .status(500)
+      .json(createResponse(false, "Failed to get leagues with points", null));
   }
 });
 

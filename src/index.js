@@ -5,6 +5,7 @@ const assetRoutes = require("./routes/assets");
 const pointsRoutes = require("./routes/points");
 const leagueRoutes = require("./routes/league");
 const userRoutes = require("./routes/users");
+const buildingRoutes = require("./routes/buildings");
 const cors = require("cors");
 
 const checkAuth = require("./middleware/authentication");
@@ -32,7 +33,7 @@ app.use((req, res, next) => {
 });
 
 app.get("/", (req, res) => {
-  res.send("👉🏻 Welcome to the Firebase Authentication and Post Management!");
+  res.send("Welcome to the Firebase Authentication and Post Management!");
 });
 
 // Register new user
@@ -151,6 +152,7 @@ app.use("/api", assetRoutes);
 app.use("/api/points", pointsRoutes);
 app.use("/api/leagues", leagueRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/buildings", buildingRoutes);
 
 // Create a new asset with additional data (requires authentication)
 app.post("/buildings/new", checkAuth, (req, res) => {
