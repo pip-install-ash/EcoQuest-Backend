@@ -5,21 +5,60 @@ const createResponse = require("../../utils/helper-functions");
 
 const router = express.Router();
 
+async function getLeaguesWithPoints(snapshot) {
+  const leagues = [];
+  for (const doc of snapshot.docs) {
+    const leagueData = doc.data();
+    const userPointsPromises = leagueData.userIDs.map(async (userID) => {
+      const pointsRef = admin.firestore().collection("userPoints").doc(userID);
+      const pointsDoc = await pointsRef.get();
+      return {
+        userID,
+        ecoPoints: pointsDoc.exists ? pointsDoc.data().ecoPoints : 0,
+        pointsDoc: pointsDoc.exists ? pointsDoc.data() : null,
+      };
+    });
+
+    const userPoints = await Promise.all(userPointsPromises);
+    const totalPoints = userPoints.reduce(
+      (acc, user) => acc + user.ecoPoints,
+      0
+    );
+    const userPresent = leagueData.userIDs.length;
+    const averagePoints = userPresent ? totalPoints / userPresent : 0;
+
+    leagues.push({
+      id: doc.id,
+      data: {
+        leagueName: leagueData.leagueName,
+        userPresent,
+        numberOfPlayers: Number(leagueData.numberOfPlayers),
+        createdBy: leagueData.createdBy,
+        joiningCode: leagueData.joiningCode,
+        isPrivate: leagueData.isPrivate,
+      },
+      averageEcoPoints: averagePoints,
+      // userPoints,
+    });
+  }
+  return leagues;
+}
+
 // Create league
 router.post("/create", checkAuth, async (req, res) => {
   const {
     leagueName,
     numberOfPlayers,
-    userIDs = [],
-    createdBy,
+    userIDs = [req.user.user_id],
     isPrivate,
   } = req.body;
 
-  if (!createdBy) {
-    return res
-      .status(400)
-      .json(createResponse(false, "Missing required fields", null));
-  }
+  const createdBy = req.user.user_id;
+  // if (!createdBy) {
+  //   return res
+  //     .status(400)
+  //     .json(createResponse(false, "Missing required fields", null));
+  // }
 
   try {
     let joiningCode = null;
@@ -57,8 +96,8 @@ router.post("/create", checkAuth, async (req, res) => {
 });
 
 // Get league by userID
-router.get("/get/:userID", checkAuth, async (req, res) => {
-  const { userID } = req.params;
+router.get("/my-leagues", checkAuth, async (req, res) => {
+  const userID = req.user.user_id;
 
   if (!userID) {
     return res.status(400).json(createResponse(false, "Missing userID", null));
@@ -78,12 +117,12 @@ router.get("/get/:userID", checkAuth, async (req, res) => {
         );
     }
 
-    const league = snapshot.docs[0];
+    const leagues = await getLeaguesWithPoints(snapshot);
+    // const league = snapshot.docs[0];
 
     res.status(200).json(
       createResponse(true, "League retrieved successfully", {
-        id: league.id,
-        data: league.data(),
+        leagues,
       })
     );
   } catch (error) {
@@ -91,7 +130,7 @@ router.get("/get/:userID", checkAuth, async (req, res) => {
   }
 });
 
-// Add user to league
+// Add user to any-league
 router.post("/add-user-to-league", checkAuth, async (req, res) => {
   const { userID, leagueID } = req.body;
 
@@ -190,35 +229,15 @@ router.get("/all-leagues-with-points", checkAuth, async (req, res) => {
         .json(createResponse(false, "No leagues found", null));
     }
 
-    const leagues = [];
-    for (const doc of snapshot.docs) {
-      const leagueData = doc.data();
-      const userPointsPromises = leagueData.userIDs.map(async (userID) => {
-        const pointsRef = admin.firestore().collection("points").doc(userID);
-        const pointsDoc = await pointsRef.get();
-        return {
-          userID,
-          ecoPoints: pointsDoc.exists ? pointsDoc.data().ecoPoints : 0,
-          pointsDoc: pointsDoc.exists ? pointsDoc.data() : null,
-        };
-      });
-
-      const userPoints = await Promise.all(userPointsPromises);
-      const totalPoints = userPoints.reduce(
-        (acc, user) => acc + user.ecoPoints,
-        0
-      );
-      const averagePoints = userPoints.length
-        ? totalPoints / userPoints.length
-        : 0;
-
-      leagues.push({
-        id: doc.id,
-        data: leagueData,
-        averageEcoPoints: averagePoints,
-        userPoints,
-      });
-    }
+    const leagues = await getLeaguesWithPoints(snapshot);
+    const leaguesForUI = leagues.map((league) => ({
+      name: league.data.leagueName,
+      playerJoined: `${league.data.userPresent}/${league.data.numberOfPlayers}`,
+      AverageEchoPoints: league.averageEcoPoints.toLocaleString(),
+      leagueID: league.id,
+      playerPresent: league.data.userPresent,
+      maxPlayers: league.data.numberOfPlayers,
+    }));
 
     res
       .status(200)
@@ -226,7 +245,7 @@ router.get("/all-leagues-with-points", checkAuth, async (req, res) => {
         createResponse(
           true,
           "Leagues with average ecoPoints and points documents retrieved successfully",
-          leagues
+          { leagues, leaguesForUI }
         )
       );
   } catch (error) {
@@ -238,12 +257,13 @@ router.get("/all-leagues-with-points", checkAuth, async (req, res) => {
 
 // Join private league
 router.post("/join-private-league", checkAuth, async (req, res) => {
-  const { joiningCode, userID } = req.body;
+  const { joiningCode } = req.body;
+  const userID = req.user.user_id;
 
-  if (!joiningCode || !userID) {
+  if (!joiningCode) {
     return res
       .status(400)
-      .json(createResponse(false, "Missing joiningCode or userID", null));
+      .json(createResponse(false, "Missing joiningCode ", null));
   }
 
   try {
@@ -297,7 +317,8 @@ router.post("/join-private-league", checkAuth, async (req, res) => {
 
 // Join public league
 router.post("/join-public-league", checkAuth, async (req, res) => {
-  const { leagueID, userID } = req.body;
+  const { leagueID } = req.body;
+  const userID = req.user.user_id;
 
   if (!leagueID || !userID) {
     return res
@@ -344,6 +365,93 @@ router.post("/join-public-league", checkAuth, async (req, res) => {
     res
       .status(500)
       .json(createResponse(false, "Failed to join public league", null));
+  }
+});
+
+// Get league data by leagueID
+router.get("/details/:leagueID", checkAuth, async (req, res) => {
+  const { leagueID } = req.params;
+
+  if (!leagueID) {
+    return res
+      .status(400)
+      .json(createResponse(false, "Missing leagueID", null));
+  }
+
+  try {
+    const leagueRef = admin.firestore().collection("leagues").doc(leagueID);
+    const leagueDoc = await leagueRef.get();
+
+    if (!leagueDoc.exists) {
+      return res
+        .status(404)
+        .json(
+          createResponse(false, "No league found with the given leagueID", null)
+        );
+    }
+
+    const leagueData = leagueDoc.data();
+    console.log("lego leag", leagueData);
+    let ownerDetails;
+    const userPointsPromises = leagueData.userIDs.map(async (userID, index) => {
+      const userRef = admin.firestore().collection("userProfiles").doc(userID);
+      const userDoc = await userRef.get();
+      const userName = userDoc.exists ? userDoc.data().userName : "Unknown";
+
+      const pointsRef = admin.firestore().collection("userPoints").doc(userID);
+      const pointsDoc = await pointsRef.get();
+      const ecoPoints = pointsDoc.exists ? pointsDoc.data().ecoPoints : 0;
+      const coin = pointsDoc.exists ? pointsDoc.data().coins : 0;
+
+      const userIsOwner = leagueData.createdBy === userID;
+      if (userIsOwner) {
+        ownerDetails = userDoc.data();
+      }
+      const assetsRef = admin
+        .firestore()
+        .collection("userAssets")
+        .where("userId", "==", userID);
+      const assetsSnapshot = await assetsRef.get();
+      const assetsDocCount = assetsSnapshot.size;
+
+      return [
+        index + 1,
+        userName,
+        ecoPoints,
+        coin,
+        assetsDocCount,
+        userIsOwner ? 0 : 1,
+        0,
+        userID,
+      ];
+    });
+
+    const userData = await Promise.all(userPointsPromises);
+
+    res.status(200).json(
+      createResponse(true, "League data retrieved successfully", {
+        leagueData: {
+          id: leagueID,
+          leagueName: leagueData.leagueName,
+          numberOfPlayers: leagueData.numberOfPlayers,
+          userPresent: leagueData.userIDs.length,
+          isPrivate: leagueData.isPrivate,
+          joiningCode: leagueData.joiningCode,
+          createdAt: leagueData.createdAt,
+          owner: {
+            email: ownerDetails?.email || "",
+            userName: ownerDetails?.userName || "",
+          },
+        },
+        isOwner: ownerDetails?.userID === req.user.user_id,
+        userData,
+      })
+    );
+  } catch (error) {
+    console.log("ERR>>", error);
+    res
+      .status(500)
+      .json(createResponse(false, "Failed to get league data", null));
   }
 });
 

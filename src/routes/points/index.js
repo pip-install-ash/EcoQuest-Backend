@@ -10,7 +10,7 @@ router.post("/create", checkAuth, async (req, res) => {
   const { userID, ecoPoints, coins, garbage, population, electricity, water } =
     req.body;
   try {
-    await admin.firestore().collection("points").doc(userID).set({
+    await admin.firestore().collection("userPoints").doc(userID).set({
       userID,
       ecoPoints,
       coins,
@@ -26,10 +26,14 @@ router.post("/create", checkAuth, async (req, res) => {
 });
 
 // Get Points by userID
-router.get("/all-points/:userID", checkAuth, async (req, res) => {
-  const { userID } = req.params;
+router.get("/all-points", checkAuth, async (req, res) => {
+  const userID = req.user.user_id;
   try {
-    const doc = await admin.firestore().collection("points").doc(userID).get();
+    const doc = await admin
+      .firestore()
+      .collection("userPoints")
+      .doc(userID)
+      .get();
     if (!doc.exists) {
       return res.status(404).send(createResponse(false, "Points not found"));
     }
@@ -42,8 +46,8 @@ router.get("/all-points/:userID", checkAuth, async (req, res) => {
 });
 
 // Update Points by userID
-router.put("/update/:userID", checkAuth, async (req, res) => {
-  const { userID } = req.params;
+router.put("/update", checkAuth, async (req, res) => {
+  const userID = req.user.user_id;
   const { ecoPoints, coins, garbage, population, electricity, water } =
     req.body;
 
@@ -57,7 +61,11 @@ router.put("/update/:userID", checkAuth, async (req, res) => {
   if (water !== undefined) updateData.water = water;
 
   try {
-    await admin.firestore().collection("points").doc(userID).update(updateData);
+    await admin
+      .firestore()
+      .collection("userPoints")
+      .doc(userID)
+      .update(updateData);
     res.status(200).send(createResponse(true, "Points updated successfully"));
   } catch (error) {
     console.log("Error: >>", error);

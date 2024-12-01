@@ -116,7 +116,24 @@ app.post("/login", (req, res) => {
 
 app.get("/user-details", checkAuth, async (req, res) => {
   const user = req.user;
+  const userPointsRef = admin
+    .firestore()
+    .collection("userPoints")
+    .doc(user.user_id);
 
+  const userPointsDoc = await userPointsRef.get();
+
+  if (!userPointsDoc.exists) {
+    await userPointsRef.set({
+      coins: 200000,
+      ecoPoints: 200,
+      electricity: 200000,
+      garbage: 0,
+      population: 0,
+      userId: user.user_id,
+      water: 200,
+    });
+  }
   await admin
     .firestore()
     .collection("userProfiles")
@@ -150,6 +167,7 @@ app.get("/logout", (req, res) => {
 
 app.use("/api", assetRoutes);
 app.use("/api/points", pointsRoutes);
+app.use("/api/league-stats", leagueRoutes); // Get league stats for resuming the league Game against a user.
 app.use("/api/leagues", leagueRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/buildings", buildingRoutes);

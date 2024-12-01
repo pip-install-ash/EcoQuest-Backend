@@ -50,7 +50,7 @@ router.post("/create", checkAuth, async (req, res) => {
 });
 
 // Get building by ID
-router.get("/:id", checkAuth, async (req, res) => {
+router.get("/build/:id", checkAuth, async (req, res) => {
   const { id } = req.params;
 
   try {
@@ -79,4 +79,23 @@ router.get("/:id", checkAuth, async (req, res) => {
   }
 });
 
+// Get all buildings
+router.get("/all-buildings", checkAuth, async (req, res) => {
+  try {
+    const buildingSnapshot = await admin
+      .firestore()
+      .collection("buildings")
+      .get();
+    const buildings = buildingSnapshot.docs.map((doc) => doc.data());
+
+    return res
+      .status(200)
+      .json(
+        createResponse(true, "Buildings retrieved successfully", buildings)
+      );
+  } catch (error) {
+    console.error("Error retrieving building:", error);
+    return res.status(500).json(createResponse(false, "Internal server error"));
+  }
+});
 module.exports = router;
