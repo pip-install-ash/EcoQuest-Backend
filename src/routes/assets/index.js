@@ -45,8 +45,16 @@ const calculateUserPoints = async (userId, buildingId) => {
 
 // Add a new asset to the user (requires authentication)
 router.post("/user/assets", checkAuth, async (req, res) => {
-  const { buildingId, isCreated, isForbidden, isRotate, isDestroyed, x, y } =
-    req.body;
+  const {
+    buildingId,
+    isCreated,
+    leagueId,
+    isForbidden,
+    isRotate,
+    isDestroyed,
+    x,
+    y,
+  } = req.body;
   if (buildingId === undefined || x === undefined || y === undefined) {
     return res
       .status(500)
@@ -65,6 +73,7 @@ router.post("/user/assets", checkAuth, async (req, res) => {
     x,
     y,
     userId: req.user.user_id,
+    leagueId: leagueId || "",
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   };
   const assetId = assetRef.id;
@@ -85,11 +94,13 @@ router.post("/user/assets", checkAuth, async (req, res) => {
 
 // Get all assets for the authenticated user
 router.get("/user/assets", checkAuth, (req, res) => {
+  const { leagueId } = req.query;
   const db = admin.firestore();
   const assetsRef = db.collection("userAssets");
 
   assetsRef
     .where("userId", "==", req.user.user_id)
+    .where("leagueId", "==", leagueId || "")
     .get()
     .then((snapshot) => {
       if (snapshot.empty) {
@@ -113,7 +124,7 @@ router.get("/user/assets", checkAuth, (req, res) => {
 
 // Delete a specific asset for the authenticated user
 router.delete("/user/assets", checkAuth, async (req, res) => {
-  const { buildingId } = req.body;
+  const { buildingId, leagueId } = req.body;
 
   if (buildingId === undefined) {
     return res
@@ -127,10 +138,12 @@ router.delete("/user/assets", checkAuth, async (req, res) => {
   if (buildingId == 1) {
     await calculateUserPoints(req.user.user_id, buildingId);
   }
+  // ...(leagueId ? [{ where: ["leagueId", "==", leagueId] }] : [])
 
   assetsRef
     .where("userId", "==", req.user.user_id)
     .where("buildingId", "==", buildingId)
+    .where("leagueId", "==", leagueId || "")
     .limit(1) // Limit to only one document
     .get()
     .then((snapshot) => {

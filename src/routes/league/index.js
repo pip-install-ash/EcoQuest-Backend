@@ -134,12 +134,7 @@ router.post("/create", checkAuth, async (req, res) => {
   // }
 
   try {
-    let joiningCode = null;
-
-    // Generate a joining code if the league is private
-    if (isPrivate) {
-      joiningCode = Math.floor(100000 + Math.random() * 900000).toString();
-    }
+    joiningCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     // Create the league document
     const leagueRef = await admin
@@ -206,6 +201,7 @@ router.get("/my-leagues", checkAuth, async (req, res) => {
       leagueID: league.id,
       playerPresent: league.data.userPresent,
       maxPlayers: league.data.numberOfPlayers,
+      isOwner: league.data.createdBy === userID,
     }));
 
     res.status(200).json(
@@ -496,7 +492,7 @@ router.get("/details/:leagueID", checkAuth, async (req, res) => {
     }
 
     const leagueData = leagueDoc.data();
-    console.log("lego leag", leagueData);
+
     let ownerDetails;
     const userPointsPromises = leagueData.userIDs.map(async (userID, index) => {
       const userRef = admin.firestore().collection("userProfiles").doc(userID);
@@ -515,7 +511,9 @@ router.get("/details/:leagueID", checkAuth, async (req, res) => {
       const assetsRef = admin
         .firestore()
         .collection("userAssets")
-        .where("userId", "==", userID);
+        .where("userId", "==", userID)
+        .where("leagueId", "==", leagueID);
+
       const assetsSnapshot = await assetsRef.get();
       const assetsDocCount = assetsSnapshot.size;
 
@@ -557,6 +555,186 @@ router.get("/details/:leagueID", checkAuth, async (req, res) => {
     res
       .status(500)
       .json(createResponse(false, "Failed to get league data", null));
+  }
+});
+
+// Delete league by leagueID
+router.delete("/delete/:leagueID", checkAuth, async (req, res) => {
+  const { leagueId } = req.params;
+  const userID = req.user.user_id;
+
+  if (!leagueId) {
+    return res
+      .status(400)
+      .json(createResponse(false, "Missing leagueID", null));
+  }
+
+  try {
+    const leagueRef = admin.firestore().collection("leagues").doc(leagueId);
+    const leagueDoc = await leagueRef.get();
+
+    if (!leagueDoc.exists) {
+      return res
+        .status(404)
+        .json(
+          createResponse(false, "No league found with the given leagueID", null)
+        );
+    }
+
+    const leagueData = leagueDoc.data();
+
+    if (leagueData.createdBy !== userID) {
+      return res
+        .status(403)
+        .json(
+          createResponse(false, "Unauthorized to delete this league", null)
+        );
+    }
+
+    // Delete league document
+    await leagueRef.delete();
+
+    // Remove all leagueStats where leagueId is same
+    const leagueStatsQuery = admin
+      .firestore()
+      .collection("leagueStats")
+      .where("leagueId", "==", leagueId);
+    const leagueStatsSnapshot = await leagueStatsQuery.get();
+    const leagueStatsDeletePromises = leagueStatsSnapshot.docs.map((doc) =>
+      doc.ref.delete()
+    );
+    await Promise.all(leagueStatsDeletePromises);
+
+    // Remove all userAssets where leagueId is same
+    const userAssetsQuery = admin
+      .firestore()
+      .collection("userAssets")
+      .where("leagueId", "==", leagueId);
+    const userAssetsSnapshot = await userAssetsQuery.get();
+    const userAssetsDeletePromises = userAssetsSnapshot.docs.map((doc) =>
+      doc.ref.delete()
+    );
+    await Promise.all(userAssetsDeletePromises);
+
+    res
+      .status(200)
+      .json(
+        createResponse(
+          true,
+          "League and related data deleted successfully",
+          null
+        )
+      );
+  } catch (error) {
+    console.error("Error deleting league:", error);
+    res
+      .status(500)
+      .json(createResponse(false, "Failed to delete league", null));
+  }
+});
+
+// Transfer ownership of league
+router.post("/transfer-ownership", checkAuth, async (req, res) => {
+  const { leagueID, newOwnerID } = req.body;
+  const { leaveLeague } = req.query;
+
+  if (!leagueID || !newOwnerID) {
+    return res
+      .status(400)
+      .json(createResponse(false, "Missing leagueID or newOwnerID", null));
+  }
+
+  try {
+    const leagueRef = admin.firestore().collection("leagues").doc(leagueID);
+    const leagueDoc = await leagueRef.get();
+
+    if (!leagueDoc.exists) {
+      return res
+        .status(404)
+        .json(
+          createResponse(false, "No league found with the given leagueID", null)
+        );
+    }
+
+    if (leagueDoc.data().createdBy !== req.user.user_id) {
+      return res
+        .status(403)
+        .json(
+          createResponse(false, "Unauthorized to transfer ownership", null)
+        );
+    }
+
+    await leagueRef.update({
+      createdBy: newOwnerID,
+      ...(leaveLeague === "true"
+        ? { userIDs: admin.firestore.FieldValue.arrayRemove(req.user.user_id) }
+        : {}),
+    });
+
+    res
+      .status(200)
+      .json(
+        createResponse(true, "League ownership transferred successfully", null)
+      );
+  } catch (error) {
+    console.error("Error transferring league ownership:", error);
+    res
+      .status(500)
+      .json(createResponse(false, "Failed to transfer league ownership", null));
+  }
+});
+
+// Get users in a league by leagueID
+router.get("/league-users/:leagueID", checkAuth, async (req, res) => {
+  const { leagueID } = req.params;
+
+  if (!leagueID) {
+    return res
+      .status(400)
+      .json(createResponse(false, "Missing leagueID", null));
+  }
+
+  try {
+    const leagueRef = admin.firestore().collection("leagues").doc(leagueID);
+    const leagueDoc = await leagueRef.get();
+
+    if (!leagueDoc.exists) {
+      return res
+        .status(404)
+        .json(
+          createResponse(false, "No league found with the given leagueID", null)
+        );
+    }
+
+    const leagueData = leagueDoc.data();
+    const userProfilesPromises = leagueData.userIDs.map(async (userID) => {
+      const userRef = admin.firestore().collection("userProfiles").doc(userID);
+      const userDoc = await userRef.get();
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        return {
+          userID,
+          userName: userData.userName,
+          email: userData.email,
+        };
+      }
+      return null;
+    });
+
+    const userProfiles = (await Promise.all(userProfilesPromises)).filter(
+      (user) => user !== null
+    );
+
+    res.status(200).json(
+      createResponse(true, "Users in league retrieved successfully", {
+        users: userProfiles,
+      })
+    );
+  } catch (error) {
+    console.error("Error getting users in league:", error);
+    res
+      .status(500)
+      .json(createResponse(false, "Failed to get users in league", null));
   }
 });
 
