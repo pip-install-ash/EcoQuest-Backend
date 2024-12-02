@@ -161,7 +161,7 @@ app.get("/user-details", checkAuth, async (req, res) => {
       }
     });
 });
-// Log out a user
+// Log out a user from the session
 app.get("/logout", (req, res) => {
   req.session.user = null;
   res.json({ message: "Logged out", success: true });
