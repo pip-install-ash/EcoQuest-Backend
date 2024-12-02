@@ -1,6 +1,6 @@
 const express = require("express");
 const admin = require("firebase-admin");
-const serviceAccount = require("./keys.json");
+const serviceAccount = require("./ecoQuest-prod.json");
 const assetRoutes = require("./routes/assets");
 const pointsRoutes = require("./routes/points");
 const leagueRoutes = require("./routes/league");
@@ -116,50 +116,55 @@ app.post("/login", (req, res) => {
 });
 
 app.get("/user-details", checkAuth, async (req, res) => {
-  const user = req.user;
-  const userPointsRef = admin
-    .firestore()
-    .collection("userPoints")
-    .doc(user.user_id);
+  try {
+    const user = req.user;
+    const userPointsRef = admin
+      .firestore()
+      .collection("userPoints")
+      .doc(user.user_id);
 
-  const userPointsDoc = await userPointsRef.get();
+    const userPointsDoc = await userPointsRef.get();
 
-  // for single user
-  if (!userPointsDoc.exists) {
-    await userPointsRef.set({
-      coins: 200000,
-      ecoPoints: 200,
-      electricity: 200000,
-      garbage: 0,
-      population: 0,
-      userId: user.user_id,
-      water: 200,
-    });
-  }
-  await admin
-    .firestore()
-    .collection("userProfiles")
-    .doc(user.user_id)
-    .get()
-    .then((doc) => {
-      res.status(200).json({
-        user_id: doc.data().userID,
-        email: doc.data().email,
-        userName: doc.data().userName,
-        gameInitMap: doc.data()?.gameInitMap,
+    // for single user
+    if (!userPointsDoc.exists) {
+      await userPointsRef.set({
+        coins: 200000,
+        ecoPoints: 200,
+        electricity: 200000,
+        garbage: 0,
+        population: 0,
+        userId: user.user_id,
+        water: 200,
       });
-    })
-    .catch((error) => {
-      console.error("Error getting user:", error);
-      if (error.code === "auth/user-not-found") {
-        res.status(404).json({
-          message: "User doesn't exist. Please register first",
-          success: false,
+    }
+    await admin
+      .firestore()
+      .collection("userProfiles")
+      .doc(user.user_id)
+      .get()
+      .then((doc) => {
+        res.status(200).json({
+          user_id: doc.data().userID,
+          email: doc.data().email,
+          userName: doc.data().userName,
+          gameInitMap: doc.data()?.gameInitMap,
         });
-      } else {
-        res.status(401).json({ message: "Login failed", success: false });
-      }
-    });
+      })
+      .catch((error) => {
+        console.error("Error getting user:", error);
+        if (error.code === "auth/user-not-found") {
+          res.status(404).json({
+            message: "User doesn't exist. Please register first",
+            success: false,
+          });
+        } else {
+          res.status(401).json({ message: "Login failed", success: false });
+        }
+      });
+  } catch (error) {
+    console.log("first error", error);
+    res.status(500).json({ message: error.message, success: false });
+  }
 });
 // Log out a user from the session
 app.get("/logout", (req, res) => {
