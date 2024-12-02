@@ -4,6 +4,7 @@ const serviceAccount = require("./keys.json");
 const assetRoutes = require("./routes/assets");
 const pointsRoutes = require("./routes/points");
 const leagueRoutes = require("./routes/league");
+const leagueStatsRoutes = require("./routes/league/stats");
 const userRoutes = require("./routes/users");
 const buildingRoutes = require("./routes/buildings");
 const cors = require("cors");
@@ -123,6 +124,7 @@ app.get("/user-details", checkAuth, async (req, res) => {
 
   const userPointsDoc = await userPointsRef.get();
 
+  // for single user
   if (!userPointsDoc.exists) {
     await userPointsRef.set({
       coins: 200000,
@@ -167,7 +169,7 @@ app.get("/logout", (req, res) => {
 
 app.use("/api", assetRoutes);
 app.use("/api/points", pointsRoutes);
-app.use("/api/league-stats", leagueRoutes); // Get league stats for resuming the league Game against a user.
+app.use("/api/league-stats", leagueStatsRoutes); // Get league stats for resuming the league Game against a user.
 app.use("/api/leagues", leagueRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/buildings", buildingRoutes);

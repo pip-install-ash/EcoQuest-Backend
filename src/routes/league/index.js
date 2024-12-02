@@ -5,7 +5,35 @@ const createResponse = require("../../utils/helper-functions");
 
 const router = express.Router();
 
-async function getLeaguesWithPoints(snapshot) {
+async function setDefaultStatsValue({
+  leagueId,
+  userId,
+  lastLogined,
+  coins,
+  ecoPoints,
+  electricity,
+  garbage,
+  population,
+  water,
+  gameInitMap,
+}) {
+  const leagueStatsRef = admin.firestore().collection("leagueStats").doc();
+  await leagueStatsRef.set({
+    leagueId,
+    userId,
+    lastLogined: lastLogined || "",
+    coins: coins || 200000,
+    ecoPoints: ecoPoints || 200,
+    electricity: electricity || 200000,
+    garbage: garbage || 0,
+    population: population || 0,
+    water: water || 200,
+    gameInitMap: "",
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+async function getLeaguesWithPointsV1(snapshot) {
   const leagues = [];
   for (const doc of snapshot.docs) {
     const leagueData = doc.data();
@@ -44,6 +72,51 @@ async function getLeaguesWithPoints(snapshot) {
   return leagues;
 }
 
+async function getLeaguesWithPoints(snapshot) {
+  const leagues = [];
+  for (const doc of snapshot.docs) {
+    const leagueData = doc.data();
+    const leagueID = doc.id;
+
+    const pointsQuery = admin
+      .firestore()
+      .collection("leagueStats")
+      .where("leagueId", "==", leagueID);
+    const pointsSnapshot = await pointsQuery.get();
+
+    const userPoints = pointsSnapshot.docs.map((pointsDoc) => ({
+      userID: pointsDoc.data().userId,
+      lastLogined: pointsDoc.data().lastLogined
+        ? pointsDoc.data().lastLogined.toDate().toISOString()
+        : "",
+      ecoPoints: pointsDoc.data().ecoPoints || 0,
+      pointsDoc: pointsDoc.data(),
+    }));
+
+    const totalPoints = userPoints.reduce(
+      (acc, user) => acc + user.ecoPoints,
+      0
+    );
+    const userPresent = leagueData.userIDs.length;
+    const averagePoints = userPresent ? totalPoints / userPresent : 0;
+
+    leagues.push({
+      id: doc.id,
+      data: {
+        leagueName: leagueData.leagueName,
+        userPresent,
+        numberOfPlayers: Number(leagueData.numberOfPlayers),
+        createdBy: leagueData.createdBy,
+        joiningCode: leagueData.joiningCode,
+        isPrivate: leagueData.isPrivate,
+        lastLogined: userPoints[0]?.lastLogined || "",
+      },
+      averageEcoPoints: averagePoints,
+      // userPoints,
+    });
+  }
+  return leagues;
+}
 // Create league
 router.post("/create", checkAuth, async (req, res) => {
   const {
@@ -82,6 +155,12 @@ router.post("/create", checkAuth, async (req, res) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+    await setDefaultStatsValue({
+      leagueId: leagueRef.id,
+      userId: createdBy,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
     res.status(201).json(
       createResponse(true, "League created successfully", {
         id: leagueRef.id,
@@ -119,10 +198,20 @@ router.get("/my-leagues", checkAuth, async (req, res) => {
 
     const leagues = await getLeaguesWithPoints(snapshot);
     // const league = snapshot.docs[0];
+    const leaguesForUI = leagues.map((league) => ({
+      name: league.data.leagueName,
+      playerJoined: `${league.data.userPresent}/${league.data.numberOfPlayers}`,
+      AverageEchoPoints: league.averageEcoPoints.toLocaleString(),
+      lastLogin: league.data.lastLogined || "N/A",
+      leagueID: league.id,
+      playerPresent: league.data.userPresent,
+      maxPlayers: league.data.numberOfPlayers,
+    }));
 
     res.status(200).json(
       createResponse(true, "League retrieved successfully", {
         leagues,
+        leaguesForUI,
       })
     );
   } catch (error) {
@@ -168,7 +257,11 @@ router.post("/add-user-to-league", checkAuth, async (req, res) => {
     await leagueRef.update({
       userIDs: admin.firestore.FieldValue.arrayUnion(userID),
     });
-
+    await setDefaultStatsValue({
+      leagueId: leagueRef.id,
+      userId: userID,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     res
       .status(200)
       .json(createResponse(true, "User added to league successfully", null));
@@ -303,6 +396,12 @@ router.post("/join-private-league", checkAuth, async (req, res) => {
       userIDs: admin.firestore.FieldValue.arrayUnion(userID),
     });
 
+    await setDefaultStatsValue({
+      leagueId: leaguesRef.id,
+      userId: userID,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
     res
       .status(200)
       .json(
@@ -354,6 +453,12 @@ router.post("/join-public-league", checkAuth, async (req, res) => {
 
     await leagueRef.update({
       userIDs: admin.firestore.FieldValue.arrayUnion(userID),
+    });
+
+    await setDefaultStatsValue({
+      leagueId: leagueRef.id,
+      userId: userID,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
     res
