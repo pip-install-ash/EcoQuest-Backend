@@ -73,4 +73,133 @@ router.put("/update", checkAuth, async (req, res) => {
   }
 });
 
+// Get all users with their ecoPoints
+router.get("/global/leaderboard", checkAuth, async (req, res) => {
+  try {
+    const usersRef = admin.firestore().collection("userProfiles");
+    const snapshot = await usersRef.get();
+
+    if (snapshot.empty) {
+      return res
+        .status(404)
+        .json(createResponse(false, "No users found", null));
+    }
+
+    const usersWithEcoPointsPromises = snapshot.docs.map(async (userDoc) => {
+      const userData = userDoc.data();
+      const pointsRef = admin
+        .firestore()
+        .collection("userPoints")
+        .doc(userDoc.id);
+      const pointsDoc = await pointsRef.get();
+      const ecoPoints = pointsDoc.exists ? pointsDoc.data().ecoPoints : 0;
+
+      return {
+        userID: userDoc.id,
+        userName: userData.userName,
+        ecoPoints,
+      };
+    });
+
+    const usersWithEcoPoints = await Promise.all(usersWithEcoPointsPromises);
+    usersWithEcoPoints.sort((a, b) => b.ecoPoints - a.ecoPoints);
+
+    const userListUI = usersWithEcoPoints.map((user, index) => [
+      index + 1,
+      user.userName,
+      user.ecoPoints,
+    ]);
+
+    res.status(200).json(
+      createResponse(true, "Users with eco points retrieved successfully", {
+        users: usersWithEcoPoints,
+        userListUI,
+      })
+    );
+  } catch (error) {
+    console.error("Error getting users with eco points:", error);
+    res
+      .status(500)
+      .json(createResponse(false, "Failed to get users with ecoPoints", null));
+  }
+});
+
+// Calculate average ecoPoints by league
+router.get("/league/leaderboard", checkAuth, async (req, res) => {
+  try {
+    const leagueStatsRef = admin.firestore().collection("leagueStats");
+    const leaguesRef = admin.firestore().collection("leagues");
+    const snapshot = await leagueStatsRef.get();
+
+    if (snapshot.empty) {
+      return res
+        .status(404)
+        .json(createResponse(false, "No leagues found", null));
+    }
+
+    const leagueEcoPointsMap = {};
+
+    snapshot.docs.forEach((doc) => {
+      const data = doc.data();
+      const leagueID = data.leagueId;
+      const ecoPoints = data.ecoPoints || 0;
+
+      if (!leagueEcoPointsMap[leagueID]) {
+        leagueEcoPointsMap[leagueID] = { totalEcoPoints: 0, count: 0 };
+      }
+
+      leagueEcoPointsMap[leagueID].totalEcoPoints += ecoPoints;
+      leagueEcoPointsMap[leagueID].count += 1;
+    });
+
+    const leagueEcoPointsPromises = Object.keys(leagueEcoPointsMap).map(
+      async (leagueID) => {
+        const leagueDocRef = await leaguesRef.doc(leagueID).get();
+        const leagueName = leagueDocRef.exists
+          ? leagueDocRef.data().leagueName
+          : "Unknown League";
+        const { totalEcoPoints, count } = leagueEcoPointsMap[leagueID];
+        const averageEcoPoints = totalEcoPoints / count;
+
+        return {
+          leagueID,
+          leagueName,
+          averageEcoPoints,
+        };
+      }
+    );
+
+    const leagueEcoPoints = await Promise.all(leagueEcoPointsPromises);
+    leagueEcoPoints.sort((a, b) => b.averageEcoPoints - a.averageEcoPoints);
+
+    const leagueListUI = leagueEcoPoints.map((league, index) => [
+      index + 1,
+      league.leagueName,
+      league.averageEcoPoints,
+    ]);
+
+    res.status(200).json(
+      createResponse(
+        true,
+        "Average eco points by league retrieved successfully",
+        {
+          leagues: leagueEcoPoints,
+          leagueListUI,
+        }
+      )
+    );
+  } catch (error) {
+    console.error("Error getting average eco points by league:", error);
+    res
+      .status(500)
+      .json(
+        createResponse(
+          false,
+          "Failed to get average eco points by league",
+          null
+        )
+      );
+  }
+});
+
 module.exports = router;

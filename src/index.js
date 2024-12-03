@@ -1,8 +1,9 @@
 const express = require("express");
 const admin = require("firebase-admin");
-const serviceAccount = require("./ecoQuest-prod.json");
+const serviceAccount = require("./stage-keys.json");
 const assetRoutes = require("./routes/assets");
 const pointsRoutes = require("./routes/points");
+const challenges = require("./routes/challenges");
 const leagueRoutes = require("./routes/league");
 const leagueStatsRoutes = require("./routes/league/stats");
 const userRoutes = require("./routes/users");
@@ -173,6 +174,7 @@ app.get("/logout", (req, res) => {
 });
 
 app.use("/api", assetRoutes);
+app.use("/v1", challenges);
 app.use("/api/points", pointsRoutes);
 app.use("/api/league-stats", leagueStatsRoutes); // Get league stats for resuming the league Game against a user.
 app.use("/api/leagues", leagueRoutes);
