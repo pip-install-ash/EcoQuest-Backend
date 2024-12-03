@@ -6,9 +6,11 @@ const e = require("express");
 
 const router = express.Router();
 
-const calculateUserPoints = async (userId, buildingId) => {
+const calculateUserPoints = async (userId, buildingId, leagueId) => {
   try {
-    console.log("Calculating user points", userId, buildingId);
+    console.log(leagueId, "Calculating user points", userId, buildingId);
+
+    // Fetch building document
     const buildingDoc = await admin
       .firestore()
       .collection("buildings")
@@ -16,28 +18,57 @@ const calculateUserPoints = async (userId, buildingId) => {
       .get();
     const buildData = buildingDoc.data();
 
-    const userDocRef = admin.firestore().collection("userPoints").doc(userId);
-    const userDoc = await userDocRef.get();
-    const userPoints = userDoc.data();
+    if (!leagueId) {
+      const userDocRef = admin.firestore().collection("userPoints").doc(userId);
+      const userDoc = await userDocRef.get();
+      if (!userDoc?.exists) {
+        console.error("User document not found");
+        return;
+      }
+      const userPoints = userDoc.data();
 
-    if (!userDoc?.exists) {
-      console.error("User document not found");
-      return;
+      const pointsData = {
+        coins:
+          userPoints.coins -
+          (buildData.cost + buildData.taxIncome) +
+          buildData.earning,
+        ecoPoints: userPoints.ecoPoints - (buildData?.ecoPoints || 0),
+        electricity: userPoints.electricity - buildData.electricityConsumption,
+        garbage: userPoints.garbage + buildData.wasteProduce,
+        population: userPoints.population + buildData.residentCapacity,
+        water: userPoints.water - buildData.waterUsage,
+      };
+
+      await userDocRef.update(pointsData);
+    } else {
+      const leagueStatsRef = admin.firestore().collection("leagueStats");
+      const leagueStatsDoc = await leagueStatsRef
+        .where("leagueId", "==", leagueId)
+        .where("userId", "==", userId)
+        .limit(1)
+        .get();
+
+      if (leagueStatsDoc.empty) {
+        console.error("League stats document not found");
+        return;
+      }
+
+      const leagueStats = leagueStatsDoc.docs[0].data();
+
+      const pointsData = {
+        coins:
+          leagueStats.coins -
+          (buildData.cost + buildData.taxIncome) +
+          buildData.earning,
+        ecoPoints: leagueStats.ecoPoints - (buildData?.ecoPoints || 0),
+        electricity: leagueStats.electricity - buildData.electricityConsumption,
+        garbage: leagueStats.garbage + buildData.wasteProduce,
+        population: leagueStats.population + buildData.residentCapacity,
+        water: leagueStats.water - buildData.waterUsage,
+      };
+
+      await leagueStatsDoc.docs[0].ref.update(pointsData);
     }
-
-    const pointsData = {
-      coins:
-        userPoints.coins -
-        (buildData.cost + buildData.taxIncome) +
-        buildData.earning,
-      ecoPoints: userPoints.ecoPoints - (buildData?.ecoPoints || 0),
-      electricity: userPoints.electricity - buildData.electricityConsumption,
-      garbage: userPoints.garbage + buildData.wasteProduce,
-      population: userPoints.population + buildData.residentCapacity,
-      water: userPoints.water - buildData.waterUsage,
-    };
-
-    await userDocRef.update(pointsData);
   } catch (error) {
     console.error("Error calculating user points:", error);
   }
@@ -81,7 +112,7 @@ router.post("/user/assets", checkAuth, async (req, res) => {
   assetRef
     .set(data)
     .then(async () => {
-      await calculateUserPoints(req.user.user_id, buildingId);
+      await calculateUserPoints(req.user.user_id, buildingId, leagueId);
       return res
         .status(200)
         .json(createResponse(true, "Asset added to user", { assetId }));
@@ -136,7 +167,7 @@ router.delete("/user/assets", checkAuth, async (req, res) => {
   const assetsRef = db.collection("userAssets");
 
   if (buildingId == 1) {
-    await calculateUserPoints(req.user.user_id, buildingId);
+    await calculateUserPoints(req.user.user_id, buildingId, leagueId);
   }
   // ...(leagueId ? [{ where: ["leagueId", "==", leagueId] }] : [])
 

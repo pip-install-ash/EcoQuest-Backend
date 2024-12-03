@@ -559,7 +559,7 @@ router.get("/details/:leagueID", checkAuth, async (req, res) => {
 });
 
 // Delete league by leagueID
-router.delete("/delete/:leagueID", checkAuth, async (req, res) => {
+router.delete("/delete/:leagueId", checkAuth, async (req, res) => {
   const { leagueId } = req.params;
   const userID = req.user.user_id;
 
