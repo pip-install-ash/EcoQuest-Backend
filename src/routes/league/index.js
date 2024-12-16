@@ -187,7 +187,7 @@ router.get("/my-leagues", checkAuth, async (req, res) => {
       return res
         .status(404)
         .json(
-          createResponse(false, "No league found for the given userID", null)
+          createResponse(false, "No leagues found for the given userID", null)
         );
     }
 
@@ -211,7 +211,8 @@ router.get("/my-leagues", checkAuth, async (req, res) => {
       })
     );
   } catch (error) {
-    res.status(500).json(createResponse(false, "Failed to get league", null));
+    console.error("Error retrieving leagues:", error);
+    res.status(500).json(createResponse(false, "Failed to get leagues", null));
   }
 });
 
@@ -262,7 +263,9 @@ router.post("/add-user-to-league", checkAuth, async (req, res) => {
       .status(200)
       .json(createResponse(true, "User added to league successfully", null));
   } catch (error) {
-    res
+    res;
+    console
+      .log("Error: >>", error)
       .status(500)
       .json(createResponse(false, "Failed to add user to league", null));
   }
@@ -306,7 +309,7 @@ router.post("/remove-user-from-league", checkAuth, async (req, res) => {
   }
 });
 
-// Get all leagues with connected points against userIDs
+// Get all leagues with connected userPoints against userIDs
 router.get("/all-leagues-with-points", checkAuth, async (req, res) => {
   try {
     const leaguesRef = admin.firestore().collection("leagues");
@@ -340,7 +343,52 @@ router.get("/all-leagues-with-points", checkAuth, async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json(createResponse(false, "Failed to get leagues with points", null));
+      .json(
+        createResponse(false, "Failed to get leagues with user points", null)
+      );
+  }
+});
+
+// Get all users with their ecoPoints
+router.get("/all-users-with-eco-points", checkAuth, async (req, res) => {
+  try {
+    const usersRef = admin.firestore().collection("userProfiles");
+    const snapshot = await usersRef.get();
+
+    if (snapshot.empty) {
+      return res
+        .status(404)
+        .json(createResponse(false, "No users found", null));
+    }
+
+    const usersWithEcoPointsPromises = snapshot.docs.map(async (userDoc) => {
+      const userData = userDoc.data();
+      const pointsRef = admin
+        .firestore()
+        .collection("userPoints")
+        .doc(userDoc.id);
+      const pointsDoc = await pointsRef.get();
+      const ecoPoints = pointsDoc.exists ? pointsDoc.data().ecoPoints : 0;
+
+      return {
+        userID: userDoc.id,
+        userName: userData.userName,
+        ecoPoints,
+      };
+    });
+
+    const usersWithEcoPoints = await Promise.all(usersWithEcoPointsPromises);
+
+    res.status(200).json(
+      createResponse(true, "Users with eco points retrieved successfully", {
+        users: usersWithEcoPoints,
+      })
+    );
+  } catch (error) {
+    console.error("Error getting users with eco points:", error);
+    res
+      .status(500)
+      .json(createResponse(false, "Failed to get users with ecoPoints", null));
   }
 });
 

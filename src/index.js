@@ -1,6 +1,6 @@
 const express = require("express");
 const admin = require("firebase-admin");
-const serviceAccount = require("./stage-keys.json");
+const serviceAccount = require("./keys.json");
 const assetRoutes = require("./routes/assets");
 const pointsRoutes = require("./routes/points");
 const challenges = require("./routes/challenges");
@@ -8,7 +8,11 @@ const leagueRoutes = require("./routes/league");
 const leagueStatsRoutes = require("./routes/league/stats");
 const userRoutes = require("./routes/users");
 const buildingRoutes = require("./routes/buildings");
+const challengeRoutes = require("./routes/challenges");
+const coinsRequestsRoutes = require("./routes/coins-requests");
 const cors = require("cors");
+const { Server } = require("socket.io");
+const cron = require("node-cron");
 
 const checkAuth = require("./middleware/authentication");
 
@@ -17,6 +21,10 @@ admin.initializeApp({
 });
 
 const app = express();
+const http = require("http");
+const server = http.createServer(app);
+const io = new Server(server);
+
 const port = process.env.PORT || 4000;
 
 app.use(
@@ -180,24 +188,13 @@ app.use("/api/league-stats", leagueStatsRoutes); // Get league stats for resumin
 app.use("/api/leagues", leagueRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/buildings", buildingRoutes);
+app.use("/api/challenges", challengeRoutes);
+app.use("/api/coins-requests", coinsRequestsRoutes);
 
 // Create a new asset with additional data (requires authentication)
 app.post("/buildings/new", checkAuth, (req, res) => {
   const { buildingId, isCreated, isForbidden, isDestroyed, isRotate, x, y } =
     req.body;
-
-  // if (
-  //   buildingId === undefined ||
-  //   isCreated === undefined ||
-  //   isForbidden === undefined ||
-  //   isRotate === undefined ||
-  //   x === undefined ||
-  //   y === undefined
-  // ) {
-  //   return res
-  //     .status(500)
-  //     .json({ message: 'All fields are required', success: false });
-  // }
 
   const db = admin.firestore();
   const buildingRef = db.collection("buildings").doc();
@@ -225,6 +222,38 @@ app.post("/buildings/new", checkAuth, (req, res) => {
     });
 });
 
-app.listen(port, () => {
+// Initialize Socket.IO
+io.on("connection", (socket) => {
+  console.log("A user connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("A user disconnected:", socket.id);
+  });
+});
+
+// Function to call the /challenges/random-disaster endpoint
+// async function callRandomDisasterEndpoint() {
+//   try {
+//     const response = await axios.get(
+//       "http://localhost:4000/challenges/random-disaster"
+//     );
+//     console.log("Random disaster triggered:", response.data);
+//   } catch (error) {
+//     console.error("Error triggering random disaster:", error);
+//   }
+// }
+
+// Schedule the function to run on a random day of the week at a specific time
+// const cronExpression = `0 0 * * ${randomDay}`; // At 00:00 (midnight) on the random day of the week
+
+const cronExpression = `*/5 * * * *`; // Every 5 minutes
+
+cron.schedule(cronExpression, () => {
+  console.log("Scheduled task running...");
+  callRandomDisasterEndpoint();
+});
+
+// Start the server
+server.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });

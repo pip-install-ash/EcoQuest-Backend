@@ -5,7 +5,7 @@ const createResponse = require("../../utils/helper-functions");
 
 const router = express.Router();
 
-// Create Points by userID
+// Create User points by userID
 router.post("/create", checkAuth, async (req, res) => {
   const { userID, ecoPoints, coins, garbage, population, electricity, water } =
     req.body;
@@ -19,9 +19,11 @@ router.post("/create", checkAuth, async (req, res) => {
       electricity,
       water,
     });
-    res.status(201).send(createResponse(true, "Points created successfully"));
+    res
+      .status(201)
+      .send(createResponse(true, "User points created successfully"));
   } catch (error) {
-    res.status(500).send(createResponse(false, "Error creating points"));
+    res.status(500).send(createResponse(false, "Error creating user points"));
   }
 });
 
@@ -35,13 +37,17 @@ router.get("/all-points", checkAuth, async (req, res) => {
       .doc(userID)
       .get();
     if (!doc.exists) {
-      return res.status(404).send(createResponse(false, "Points not found"));
+      return res
+        .status(404)
+        .send(createResponse(false, "User points not found"));
     }
     res
       .status(200)
-      .send(createResponse(true, "Points retrieved successfully", doc.data()));
+      .send(
+        createResponse(true, "User points retrieved successfully", doc.data())
+      );
   } catch (error) {
-    res.status(500).send(createResponse(false, "Error getting points"));
+    res.status(500).send(createResponse(false, "Error getting user points"));
   }
 });
 
@@ -69,7 +75,7 @@ router.put("/update", checkAuth, async (req, res) => {
     res.status(200).send(createResponse(true, "Points updated successfully"));
   } catch (error) {
     console.log("Error: >>", error);
-    res.status(500).send(createResponse(false, "Error updating points"));
+    res.status(500).send(createResponse(false, "Error updating user points"));
   }
 });
 
