@@ -10,6 +10,8 @@ const userRoutes = require("./routes/users");
 const buildingRoutes = require("./routes/buildings");
 const challengeRoutes = require("./routes/challenges");
 const coinsRequestsRoutes = require("./routes/coins-requests");
+const disasterRoutes = require("./routes/disasters");
+const notificationsRoutes = require("./routes/notifications");
 const cors = require("cors");
 const { Server } = require("socket.io");
 const cron = require("node-cron");
@@ -190,6 +192,8 @@ app.use("/api/users", userRoutes);
 app.use("/api/buildings", buildingRoutes);
 app.use("/api/challenges", challengeRoutes);
 app.use("/api/coins-requests", coinsRequestsRoutes);
+app.use("/api/disasters", disasterRoutes);
+app.use("/api/notifications", notificationsRoutes);
 
 // Create a new asset with additional data (requires authentication)
 app.post("/buildings/new", checkAuth, (req, res) => {
