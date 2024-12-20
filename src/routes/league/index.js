@@ -117,6 +117,7 @@ async function getLeaguesWithPoints(snapshot) {
   }
   return leagues;
 }
+
 // Create league
 router.post("/create", checkAuth, async (req, res) => {
   const {
@@ -783,6 +784,150 @@ router.get("/league-users/:leagueID", checkAuth, async (req, res) => {
     res
       .status(500)
       .json(createResponse(false, "Failed to get users in league", null));
+  }
+});
+
+// Get user by userName or email in league
+router.post("/user-in-league", checkAuth, async (req, res) => {
+  const { leagueID, userName, email } = req.body;
+
+  if (!leagueID || (!userName && !email)) {
+    return res
+      .status(400)
+      .json(createResponse(false, "Missing leagueID, userName or email", null));
+  }
+
+  try {
+    const userProfilesRef = admin.firestore().collection("userProfiles");
+    let userQuery = userProfilesRef;
+
+    if (userName) {
+      userQuery = userQuery.where("userName", "==", userName);
+    } else if (email) {
+      userQuery = userQuery.where("email", "==", email);
+    }
+
+    const userSnapshot = await userQuery.get();
+
+    if (userSnapshot.empty) {
+      return res
+        .status(404)
+        .json(
+          createResponse(false, "No user found with the given criteria", null)
+        );
+    }
+
+    const userDoc = userSnapshot.docs[0];
+    const userID = userDoc.id;
+
+    const leagueRef = admin.firestore().collection("leagues").doc(leagueID);
+    const leagueDoc = await leagueRef.get();
+
+    if (!leagueDoc.exists) {
+      return res
+        .status(404)
+        .json(
+          createResponse(false, "No league found with the given leagueID", null)
+        );
+    }
+
+    const leagueData = leagueDoc.data();
+
+    if (!leagueData.userIDs.includes(userID)) {
+      return res
+        .status(404)
+        .json(createResponse(false, "User not found in the league", null));
+    }
+
+    res.status(200).json(
+      createResponse(true, "User found in league", {
+        userID,
+        userName: userDoc.data().userName,
+        email: userDoc.data().email,
+      })
+    );
+  } catch (error) {
+    console.error("Error getting user in league:", error);
+    res
+      .status(500)
+      .json(createResponse(false, "Failed to get user in league", null));
+  }
+});
+
+// Invite user to league
+router.post("/invite-user-to-league", checkAuth, async (req, res) => {
+  const { userName, email, joiningCode, leagueName } = req.body;
+
+  if ((!userName && !email) || (!joiningCode && !leagueName)) {
+    return res
+      .status(400)
+      .json(createResponse(false, "Missing required fields", null));
+  }
+
+  try {
+    const userProfilesRef = admin.firestore().collection("userProfiles");
+    let userQuery = userProfilesRef;
+
+    if (userName) {
+      userQuery = userQuery.where("userName", "==", userName);
+    } else if (email) {
+      userQuery = userQuery.where("email", "==", email);
+    }
+
+    const userSnapshot = await userQuery.get();
+
+    if (userSnapshot.empty) {
+      return res
+        .status(404)
+        .json(
+          createResponse(false, "No user found with the given criteria", null)
+        );
+    }
+
+    const userDoc = userSnapshot.docs[0];
+    const userID = userDoc.id;
+
+    const leaguesRef = admin.firestore().collection("leagues");
+    let leagueQuery = leaguesRef;
+
+    if (joiningCode) {
+      leagueQuery = leagueQuery.where("joiningCode", "==", joiningCode);
+    } else if (leagueName) {
+      leagueQuery = leagueQuery.where("leagueName", "==", leagueName);
+    }
+
+    const leagueSnapshot = await leagueQuery.get();
+
+    if (leagueSnapshot.empty) {
+      return res
+        .status(404)
+        .json(
+          createResponse(false, "No league found with the given criteria", null)
+        );
+    }
+
+    const leagueDoc = leagueSnapshot.docs[0];
+    const leagueData = leagueDoc.data();
+
+    const notificationRef = admin.firestore().collection("notifications").doc();
+    await notificationRef.set({
+      message: `${userDoc.data().userName} invited you to the league: ${
+        leagueData.leagueName
+      }`,
+      notificationType: "leagueInvitation",
+      isGlobal: false,
+      userID: userID,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res
+      .status(200)
+      .json(createResponse(true, "User invited to league successfully", null));
+  } catch (error) {
+    console.error("Error inviting user to league:", error);
+    res
+      .status(500)
+      .json(createResponse(false, "Failed to invite user to league", null));
   }
 });
 
