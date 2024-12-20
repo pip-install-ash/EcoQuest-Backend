@@ -148,6 +148,31 @@ router.post("/send-coins", checkAuth, async (req, res) => {
       });
     }
 
+    // Fetch sender's user profile to get the user name
+    const senderProfileSnapshot = await admin
+      .firestore()
+      .collection("userProfiles")
+      .doc(senderID)
+      .get();
+
+    if (!senderProfileSnapshot.exists) {
+      return res
+        .status(404)
+        .json(createResponse(false, "Sender's user profile not found"));
+    }
+
+    const senderProfileData = senderProfileSnapshot.data();
+    const senderName = senderProfileData.userName;
+
+    // Create the notification document
+    const notificationDoc = {
+      message: `Resources received: ${coinsRequested.money} GOLD, ${coinsRequested.electricity}KW, ${coinsRequested.water} LITER, from ${senderName}`,
+      notificationType: "resourcesReceived",
+      isGlobal: false,
+      userID: requestingUserID,
+    };
+    await admin.firestore().collection("notifications").add(notificationDoc);
+
     return res
       .status(200)
       .json(createResponse(true, "Coins transferred successfully"));
@@ -158,11 +183,18 @@ router.post("/send-coins", checkAuth, async (req, res) => {
 });
 
 router.get("/pending-requests", checkAuth, async (req, res) => {
+  const { leagueID } = req.query;
+
+  if (!leagueID) {
+    return res.status(400).json(createResponse(false, "Missing leagueID"));
+  }
+
   try {
     const pendingRequestsSnapshot = await admin
       .firestore()
       .collection("coinsRequests")
       .where("isAccepted", "==", false)
+      .where("leagueID", "==", leagueID)
       .get();
 
     if (pendingRequestsSnapshot.empty) {
