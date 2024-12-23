@@ -6,7 +6,8 @@ const createResponse = require("../../utils/helper-functions");
 const router = express.Router();
 
 router.post("/request-coins", checkAuth, async (req, res) => {
-  const { leagueID, userID, coinsRequested } = req.body;
+  const userID = req.user.user_id;
+  const { leagueID, coinsRequested } = req.body;
 
   if (
     !leagueID ||
@@ -48,22 +49,37 @@ router.post("/request-coins", checkAuth, async (req, res) => {
   }
 });
 
-router.post("/send-coins", checkAuth, async (req, res) => {
-  const { requestingUserID, senderID, leagueID, coinsRequested } = req.body;
+router.post("/send-coins/:coinsRequestID", checkAuth, async (req, res) => {
+  const senderID = req.user.user_id;
+  const { coinsRequestID } = req.params;
 
-  if (
-    !requestingUserID ||
-    !senderID ||
-    !leagueID ||
-    !coinsRequested ||
-    typeof coinsRequested !== "object" ||
-    !coinsRequested.electricity ||
-    !coinsRequested.water ||
-    !coinsRequested.money
-  ) {
+  if (!coinsRequestID) {
     return res
       .status(400)
-      .json(createResponse(false, "Missing or invalid required fields"));
+      .json(createResponse(false, "Missing coinsRequestID"));
+  }
+
+  const coinsRequestDoc = await admin
+    .firestore()
+    .collection("coinsRequests")
+    .doc(coinsRequestID)
+    .get();
+
+  if (!coinsRequestDoc.exists) {
+    return res
+      .status(404)
+      .json(createResponse(false, "Coins request not found"));
+  }
+
+  const requestData = coinsRequestDoc.data();
+  const requestingUserID = requestData.userID;
+  const leagueID = requestData.leagueID;
+  const coinsRequested = requestData.coinsRequested;
+
+  if (requestData.isAccepted) {
+    return res
+      .status(400)
+      .json(createResponse(false, "Request already accepted"));
   }
 
   try {
