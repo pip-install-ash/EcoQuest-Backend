@@ -92,6 +92,62 @@ router.post("/create-challenge", checkAuth, async (req, res) => {
       .collection("challenges")
       .add(newChallenge);
 
+    // Fetch all users
+    const userProfilesSnapshot = await admin
+      .firestore()
+      .collection("userProfiles")
+      .get();
+    const userIds = userProfilesSnapshot.docs.map((doc) => doc.id);
+
+    // Fetch all leagues
+    const leaguesSnapshot = await admin.firestore().collection("leagues").get();
+    const leagueIds = leaguesSnapshot.docs.map((doc) => doc.id);
+
+    // Create challengeProgress documents
+    const batch = admin.firestore().batch();
+
+    // For each user with leagueID null
+    userIds.forEach((userID) => {
+      const challengeProgress = {
+        challengeID: challengeRef.id,
+        userID,
+        leagueID: null,
+        progress: {
+          buildingID: required.buildingID,
+          count: 0,
+        },
+        isCompleted: false,
+      };
+      const challengeProgressRef = admin
+        .firestore()
+        .collection("challengeProgress")
+        .doc();
+      batch.set(challengeProgressRef, challengeProgress);
+    });
+
+    // For each user with each leagueID
+    userIds.forEach((userID) => {
+      leagueIds.forEach((leagueID) => {
+        const challengeProgress = {
+          challengeID: challengeRef.id,
+          userID,
+          leagueID,
+          progress: {
+            buildingID: required.buildingID,
+            count: 0,
+          },
+          isCompleted: false,
+        };
+        const challengeProgressRef = admin
+          .firestore()
+          .collection("challengeProgress")
+          .doc();
+        batch.set(challengeProgressRef, challengeProgress);
+      });
+    });
+
+    await batch.commit();
+
     // Create the notification document
     const notificationDoc = {
       message:
@@ -136,7 +192,7 @@ router.post("/create-challenge", checkAuth, async (req, res) => {
 // });
 
 router.post("/create-challenge-progress", checkAuth, async (req, res) => {
-  const { challengeID, userID, buildingID, count } = req.body;
+  const { challengeID, userID, buildingID, count, leagueID } = req.body;
 
   if (!challengeID || !userID || !buildingID || !count) {
     return res
@@ -147,6 +203,7 @@ router.post("/create-challenge-progress", checkAuth, async (req, res) => {
   const challengeProgress = {
     challengeID,
     userID,
+    leagueID: leagueID || null,
     progress: {
       buildingID,
       count,
@@ -166,6 +223,18 @@ router.post("/create-challenge-progress", checkAuth, async (req, res) => {
         .json(
           createResponse(false, `No challenge found for the id: ${challengeID}`)
         );
+    }
+
+    if (leagueID) {
+      const leagueRef = admin.firestore().collection("leagues").doc(leagueID);
+      const leagueDoc = await leagueRef.get();
+      if (!leagueDoc.exists) {
+        return res
+          .status(404)
+          .json(
+            createResponse(false, `No league found for the id: ${leagueID}`)
+          );
+      }
     }
 
     await admin
@@ -242,6 +311,73 @@ router.get("/completed-challenges", checkAuth, async (req, res) => {
     );
   } catch (error) {
     console.error("Error fetching completed challenges:", error);
+    res
+      .status(500)
+      .json(createResponse(false, "An error occurred", error.message));
+  }
+});
+
+router.get("/challenge-progress", checkAuth, async (req, res) => {
+  const userID = req.user.user_id;
+  const { leagueID } = req.query;
+
+  try {
+    let query = admin
+      .firestore()
+      .collection("challengeProgress")
+      .where("userID", "==", userID);
+
+    if (leagueID) {
+      query = query.where("leagueID", "==", leagueID);
+    } else {
+      query = query.where("leagueID", "==", null);
+    }
+
+    const challengeProgressSnapshot = await query.get();
+    const challengeProgress = await Promise.all(
+      challengeProgressSnapshot.docs.map(async (doc) => {
+        const data = doc.data();
+
+        // Get building details
+        const buildingDoc = await admin
+          .firestore()
+          .collection("buildings")
+          .doc(data.progress.buildingID)
+          .get();
+        const building = buildingDoc.data();
+
+        // Get challenge details
+        const challengeDoc = await admin
+          .firestore()
+          .collection("challenges")
+          .doc(data.challengeID)
+          .get();
+        const challenge = challengeDoc.data();
+
+        // Format message
+        const title = building.title;
+        const count = challenge.required.count;
+        const message = `Build ${count} ${title}`;
+
+        return {
+          id: doc.id,
+          progress: data.progress,
+          isCompleted: data.isCompleted,
+          message,
+          requiredCount: count,
+        };
+      })
+    );
+
+    res.json(
+      createResponse(
+        true,
+        "Challenge progress fetched successfully",
+        challengeProgress
+      )
+    );
+  } catch (error) {
+    console.error("Error fetching challenge progress:", error);
     res
       .status(500)
       .json(createResponse(false, "An error occurred", error.message));
