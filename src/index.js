@@ -12,6 +12,7 @@ const challengeRoutes = require("./routes/challenges");
 const coinsRequestsRoutes = require("./routes/coins-requests");
 const disasterRoutes = require("./routes/disasters");
 const notificationsRoutes = require("./routes/notifications");
+const chatRoutes = require("./routes/chat");
 const cors = require("cors");
 const { Server } = require("socket.io");
 const cron = require("node-cron");
@@ -194,6 +195,71 @@ app.use("/api/challenges", challengeRoutes);
 app.use("/api/coins-requests", coinsRequestsRoutes);
 app.use("/api/disasters", disasterRoutes);
 app.use("/api/notifications", notificationsRoutes);
+app.use("/api/chat", chatRoutes);
+
+// Socket.IO connection handling
+io.on("connection", (socket) => {
+  console.log("A user connected:", socket.id);
+
+  // Join room based on leagueID
+  socket.on("joinLeague", (leagueID) => {
+    console.log("leagueID", leagueID);
+    socket.join(leagueID);
+    console.log(`User ${socket.id} joined league ${leagueID}`);
+  });
+
+  // Handle message sending
+  socket.on("sendMessage", async (data) => {
+    console.log("Message received:", typeof data);
+    let parsedData;
+    try {
+      parsedData = typeof data === "string" ? JSON.parse(data) : data;
+    } catch (error) {
+      console.error("Error parsing message data:", error);
+      return socket.emit("error", "Invalid message format");
+    }
+
+    const { leagueID, message, userID } = parsedData;
+    console.log("leagueID", leagueID, "message", message, "userID: >>", userID);
+    socket.join(leagueID);
+    // Get user details for sender name
+    const userDoc = await admin
+      .firestore()
+      .collection("userProfiles")
+      .doc(userID)
+      .get();
+    if (!userDoc.exists) {
+      console.error("Missing userID in the received data:", parsedData);
+      return socket.emit("error", "User not found");
+    }
+
+    const senderName = userDoc.data().userName || "Anonymous";
+
+    // Create message document
+    const messageDoc = {
+      senderId: userID,
+      senderName,
+      message,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await admin
+      .firestore()
+      .collection("leagueChats")
+      .doc(leagueID)
+      .collection("messages")
+      .add(messageDoc);
+
+    // Broadcast message to the league room
+    console.log("Emitting message to league room:", leagueID);
+    io.to(leagueID).emit(leagueID, messageDoc);
+  });
+
+  // Handle user disconnection
+  socket.on("disconnect", () => {
+    console.log("A user disconnected:", socket.id);
+  });
+});
 
 // Create a new asset with additional data (requires authentication)
 app.post("/buildings/new", checkAuth, (req, res) => {
@@ -224,15 +290,6 @@ app.post("/buildings/new", checkAuth, (req, res) => {
       console.error("Error creating asset:", error);
       return res.status(500).json({ message: error.message, success: false });
     });
-});
-
-// Initialize Socket.IO
-io.on("connection", (socket) => {
-  console.log("A user connected:", socket.id);
-
-  socket.on("disconnect", () => {
-    console.log("A user disconnected:", socket.id);
-  });
 });
 
 // Function to call the /challenges/random-disaster endpoint
