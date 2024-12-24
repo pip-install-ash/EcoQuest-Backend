@@ -921,6 +921,7 @@ router.post("/invite-user-to-league", checkAuth, async (req, res) => {
       isGlobal: false,
       userID: userID,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      joiningCode: leagueData.joiningCode,
     });
 
     res

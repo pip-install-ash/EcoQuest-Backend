@@ -155,6 +155,7 @@ router.post("/create-challenge", checkAuth, async (req, res) => {
       notificationType: "challenge",
       isGlobal: true,
       userID: null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
     await admin.firestore().collection("notifications").add(notificationDoc);
 
