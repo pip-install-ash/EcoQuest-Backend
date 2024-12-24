@@ -224,13 +224,33 @@ router.get("/pending-requests", checkAuth, async (req, res) => {
       ...doc.data(),
     }));
 
+    // Fetch user profiles
+    const userIds = pendingRequests.map((request) => request.userID);
+    const userProfilesSnapshot = await admin
+      .firestore()
+      .collection("userProfiles")
+      .where(admin.firestore.FieldPath.documentId(), "in", userIds)
+      .get();
+
+    const userProfiles = userProfilesSnapshot.docs.reduce((acc, doc) => {
+      acc[doc.id] = doc.data().userName || "Anonymous";
+      return acc;
+    }, {});
+
+    // Format response
+    const formattedRequests = pendingRequests.map((request) => ({
+      id: request.id,
+      name: userProfiles[request.userID] || "Anonymous",
+      coinsRequested: request.coinsRequested,
+    }));
+
     return res
       .status(200)
       .json(
         createResponse(
           true,
           "Pending requests retrieved successfully",
-          pendingRequests
+          formattedRequests
         )
       );
   } catch (error) {
