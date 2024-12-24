@@ -192,11 +192,22 @@ router.get("/user-destruction/:disasterId", checkAuth, async (req, res) => {
         item.userId === userId && (!item.leagueId || item.leagueId === "")
     );
 
-    // Add destruction message to each item
-    const destructionsWithMessage = userDestructions.map((item) => ({
-      ...item,
-      destructionMessage: formatDestructionMessage(item.destruction),
-    }));
+    // Add destruction message and endedAt to each item
+    const destructionsWithMessage = userDestructions.map((item) => {
+      // Calculate hours passed since creation
+      const createdAt = disasterData.createdAt.toDate();
+      const now = new Date();
+      const hoursPassed = Math.floor((now - createdAt) / (1000 * 60 * 60));
+
+      // Remove userId and leagueId from the response
+      const { userId, leagueId, ...itemWithoutIds } = item;
+
+      return {
+        ...itemWithoutIds,
+        destructionMessage: formatDestructionMessage(item.destruction),
+        endedAt: `Ended ${hoursPassed} hour${hoursPassed !== 1 ? "s" : ""} ago`,
+      };
+    });
 
     res.json(
       createResponse(
@@ -238,10 +249,23 @@ router.get(
         (item) => item.userId === userId && item.leagueId === leagueId
       );
 
-      const destructionsWithMessage = leagueDestructions.map((item) => ({
-        ...item,
-        destructionMessage: formatDestructionMessage(item.destruction),
-      }));
+      const destructionsWithMessage = leagueDestructions.map((item) => {
+        // Calculate hours passed since creation
+        const createdAt = disasterData.createdAt.toDate();
+        const now = new Date();
+        const hoursPassed = Math.floor((now - createdAt) / (1000 * 60 * 60));
+
+        // Remove userId and leagueId from the response
+        const { userId, leagueId, ...itemWithoutIds } = item;
+
+        return {
+          ...itemWithoutIds,
+          destructionMessage: formatDestructionMessage(item.destruction),
+          endedAt: `Ended ${hoursPassed} hour${
+            hoursPassed !== 1 ? "s" : ""
+          } ago`,
+        };
+      });
 
       res.json(
         createResponse(
@@ -258,5 +282,35 @@ router.get(
     }
   }
 );
+
+router.get("/all-disasters", checkAuth, async (req, res) => {
+  try {
+    const disastersSnapshot = await admin
+      .firestore()
+      .collection("disasters")
+      .orderBy("createdAt", "desc")
+      .get();
+
+    const allDisasters = disastersSnapshot.docs.map((doc) => {
+      const data = doc.data();
+      const createdAt = data.createdAt.toDate();
+      const now = new Date();
+      const hoursPassed = Math.floor((now - createdAt) / (1000 * 60 * 60));
+
+      return {
+        id: doc.id,
+        disaster: data.disasterType,
+        endedAt: `Ended ${hoursPassed} hour${hoursPassed !== 1 ? "s" : ""} ago`,
+      };
+    });
+
+    res.json(createResponse(true, "All disasters retrieved", allDisasters));
+  } catch (error) {
+    console.error("Error getting all disasters:", error);
+    res
+      .status(500)
+      .json(createResponse(false, "An error occurred", error.message));
+  }
+});
 
 module.exports = router;
