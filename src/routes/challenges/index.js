@@ -366,6 +366,8 @@ router.get("/challenge-progress", checkAuth, async (req, res) => {
           isCompleted: data.isCompleted,
           message,
           requiredCount: count,
+          endTime: challenge.endTime,
+          points: challenge.points,
         };
       })
     );

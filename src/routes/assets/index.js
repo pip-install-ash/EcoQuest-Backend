@@ -215,6 +215,7 @@ async function handleBuildingCreation(buildingID, userID, leagueID = null) {
       .collection("challenges")
       .where("isEnded", "==", false)
       .get();
+
     const challenges = challengesSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
@@ -241,8 +242,13 @@ async function handleBuildingCreation(buildingID, userID, leagueID = null) {
       .firestore()
       .collection("challenges")
       .where("isEnded", "==", false)
-      .where("required.buildingID", "==", buildingID)
+      .where(
+        "required.buildingID",
+        "==",
+        typeof buildingID !== "string" ? `${buildingID}` : buildingID
+      )
       .get();
+
     const activeChallenges = activeChallengesSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
