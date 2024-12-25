@@ -307,12 +307,12 @@ app.post("/buildings/new", checkAuth, (req, res) => {
 // Schedule the function to run on a random day of the week at a specific time
 // const cronExpression = `0 0 * * ${randomDay}`; // At 00:00 (midnight) on the random day of the week
 
-const cronExpression = `*/5 * * * *`; // Every 5 minutes
+// const cronExpression = `*/5 * * * *`; // Every 5 minutes
 
-cron.schedule(cronExpression, () => {
-  console.log("Scheduled task running...");
-  callRandomDisasterEndpoint();
-});
+// cron.schedule(cronExpression, () => {
+//   console.log("Scheduled task running...");
+//   callRandomDisasterEndpoint();
+// });
 
 // Start the server
 server.listen(port, () => {

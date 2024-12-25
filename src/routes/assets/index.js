@@ -2,13 +2,51 @@ const express = require("express");
 const admin = require("firebase-admin");
 const checkAuth = require("../../middleware/authentication");
 const createResponse = require("../../utils/helper-functions");
-const e = require("express");
 
 const router = express.Router();
 
-const calculateUserPoints = async (userId, buildingId, leagueId) => {
+// Endpoint to manually calculate user points
+router.post(
+  "/user/days-based-points-calculation",
+  checkAuth,
+  async (req, res) => {
+    const { userId, buildingId, leagueId, noOfDays } = req.body;
+
+    if (!userId || !buildingId) {
+      return res
+        .status(400)
+        .json(createResponse(false, "userId and buildingId are required"));
+    }
+
+    try {
+      const data = await calculateUserPoints(
+        userId,
+        buildingId,
+        leagueId,
+        noOfDays
+      );
+      return res
+        .status(200)
+        .json(
+          createResponse(
+            true,
+            `User points calculated successfully for ${noOfDays} day(s)`,
+            data
+          )
+        );
+    } catch (error) {
+      console.error("Error calculating user points:", error);
+      return res
+        .status(500)
+        .json(createResponse(false, "Error calculating user points"));
+    }
+  }
+);
+
+const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
   try {
-    console.log(leagueId, "Calculating user points", userId, buildingId);
+    // If noOfDays is not provided, set it to 1
+    noOfDays = noOfDays || 1;
 
     // Fetch building document
     const buildingDoc = await admin
@@ -17,6 +55,8 @@ const calculateUserPoints = async (userId, buildingId, leagueId) => {
       .doc(`${buildingId}`)
       .get();
     const buildData = buildingDoc.data();
+
+    let pointsData;
 
     if (!leagueId) {
       const userDocRef = admin.firestore().collection("userPoints").doc(userId);
@@ -27,16 +67,19 @@ const calculateUserPoints = async (userId, buildingId, leagueId) => {
       }
       const userPoints = userDoc.data();
 
-      const pointsData = {
+      pointsData = {
         coins:
           userPoints.coins -
           (buildData.cost + buildData.taxIncome) +
           buildData.earning,
-        ecoPoints: userPoints.ecoPoints - (buildData?.ecoPoints || 0),
-        electricity: userPoints.electricity - buildData.electricityConsumption,
-        garbage: userPoints.garbage + buildData.wasteProduce,
-        population: userPoints.population + buildData.residentCapacity,
-        water: userPoints.water - buildData.waterUsage,
+        ecoPoints:
+          userPoints.ecoPoints - (buildData?.ecoPoints || 0) * noOfDays,
+        electricity:
+          userPoints.electricity - buildData.electricityConsumption * noOfDays,
+        garbage: userPoints.garbage + buildData.wasteProduce * noOfDays,
+        population:
+          userPoints.population + buildData.residentCapacity * noOfDays,
+        water: userPoints.water - buildData.waterUsage * noOfDays,
       };
 
       await userDocRef.update(pointsData);
@@ -55,20 +98,25 @@ const calculateUserPoints = async (userId, buildingId, leagueId) => {
 
       const leagueStats = leagueStatsDoc.docs[0].data();
 
-      const pointsData = {
+      pointsData = {
         coins:
           leagueStats.coins -
           (buildData.cost + buildData.taxIncome) +
           buildData.earning,
-        ecoPoints: leagueStats.ecoPoints - (buildData?.ecoPoints || 0),
-        electricity: leagueStats.electricity - buildData.electricityConsumption,
-        garbage: leagueStats.garbage + buildData.wasteProduce,
-        population: leagueStats.population + buildData.residentCapacity,
-        water: leagueStats.water - buildData.waterUsage,
+        ecoPoints:
+          leagueStats.ecoPoints - (buildData?.ecoPoints || 0) * noOfDays,
+        electricity:
+          leagueStats.electricity - buildData.electricityConsumption * noOfDays,
+        garbage: leagueStats.garbage + buildData.wasteProduce * noOfDays,
+        population:
+          leagueStats.population + buildData.residentCapacity * noOfDays,
+        water: leagueStats.water - buildData.waterUsage * noOfDays,
       };
 
       await leagueStatsDoc.docs[0].ref.update(pointsData);
     }
+
+    return pointsData;
   } catch (error) {
     console.error("Error calculating user points:", error);
   }
@@ -194,8 +242,6 @@ router.delete("/user/assets", checkAuth, async (req, res) => {
       return res.status(500).json(createResponse(false, error.message));
     });
 });
-
-module.exports = router;
 
 async function handleBuildingCreation(buildingID, userID, leagueID = null) {
   try {
@@ -389,3 +435,5 @@ async function handleBuildingCreation(buildingID, userID, leagueID = null) {
     return { success: false, message: error.message };
   }
 }
+
+module.exports = router;
