@@ -92,6 +92,62 @@ router.post("/create-challenge", checkAuth, async (req, res) => {
       .collection("challenges")
       .add(newChallenge);
 
+    // Fetch all users
+    const userProfilesSnapshot = await admin
+      .firestore()
+      .collection("userProfiles")
+      .get();
+    const userIds = userProfilesSnapshot.docs.map((doc) => doc.id);
+
+    // Fetch all leagues
+    const leaguesSnapshot = await admin.firestore().collection("leagues").get();
+    const leagueIds = leaguesSnapshot.docs.map((doc) => doc.id);
+
+    // Create challengeProgress documents
+    const batch = admin.firestore().batch();
+
+    // For each user with leagueID null
+    userIds.forEach((userID) => {
+      const challengeProgress = {
+        challengeID: challengeRef.id,
+        userID,
+        leagueID: null,
+        progress: {
+          buildingID: required.buildingID,
+          count: 0,
+        },
+        isCompleted: false,
+      };
+      const challengeProgressRef = admin
+        .firestore()
+        .collection("challengeProgress")
+        .doc();
+      batch.set(challengeProgressRef, challengeProgress);
+    });
+
+    // For each user with each leagueID
+    userIds.forEach((userID) => {
+      leagueIds.forEach((leagueID) => {
+        const challengeProgress = {
+          challengeID: challengeRef.id,
+          userID,
+          leagueID,
+          progress: {
+            buildingID: required.buildingID,
+            count: 0,
+          },
+          isCompleted: false,
+        };
+        const challengeProgressRef = admin
+          .firestore()
+          .collection("challengeProgress")
+          .doc();
+        batch.set(challengeProgressRef, challengeProgress);
+      });
+    });
+
+    await batch.commit();
+
     // Create the notification document
     const notificationDoc = {
       message:
@@ -99,6 +155,7 @@ router.post("/create-challenge", checkAuth, async (req, res) => {
       notificationType: "challenge",
       isGlobal: true,
       userID: null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
     await admin.firestore().collection("notifications").add(notificationDoc);
 
@@ -115,212 +172,28 @@ router.post("/create-challenge", checkAuth, async (req, res) => {
   }
 });
 
-router.post("/test-building-creation", checkAuth, async (req, res) => {
-  const { buildingID, userID, leagueID } = req.body;
+// router.post("/test-building-creation", checkAuth, async (req, res) => {
+//   const { buildingID, userID, leagueID } = req.body;
 
-  if (!buildingID || !userID) {
-    return res
-      .status(400)
-      .json(createResponse(false, "buildingID and userID are required"));
-  }
+//   if (!buildingID || !userID) {
+//     return res
+//       .status(400)
+//       .json(createResponse(false, "buildingID and userID are required"));
+//   }
 
-  try {
-    await handleBuildingCreation(buildingID, userID, leagueID);
-    res.json(createResponse(true, "Building creation handled successfully"));
-  } catch (error) {
-    console.error("Error handling building creation:", error);
-    res
-      .status(500)
-      .json(createResponse(false, "An error occurred", error.message));
-  }
-});
-
-async function handleBuildingCreation(buildingID, userID, leagueID = null) {
-  try {
-    console.log("Starting handleBuildingCreation function");
-    console.log(
-      "buildingID:",
-      buildingID,
-      "userID:",
-      userID,
-      "leagueID:",
-      leagueID
-    );
-
-    // Get all challenges with isEnded: false
-    const challengesSnapshot = await admin
-      .firestore()
-      .collection("challenges")
-      .where("isEnded", "==", false)
-      .get();
-    const challenges = challengesSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    console.log("Fetched challenges:", challenges);
-
-    // Update isEnded to true for challenges where endTime has passed
-    const now = new Date();
-    const batch = admin.firestore().batch();
-    challenges.forEach((challenge) => {
-      if (new Date(challenge.endTime) < now) {
-        const challengeRef = admin
-          .firestore()
-          .collection("challenges")
-          .doc(challenge.id);
-        batch.update(challengeRef, { isEnded: true });
-      }
-    });
-    await batch.commit();
-    console.log("Updated ended challenges");
-
-    // Get active challenges with the provided buildingID
-    const activeChallengesSnapshot = await admin
-      .firestore()
-      .collection("challenges")
-      .where("isEnded", "==", false)
-      .where("required.buildingID", "==", buildingID)
-      .get();
-    const activeChallenges = activeChallengesSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    console.log("Fetched active challenges:", activeChallenges);
-
-    if (activeChallenges.length === 0) {
-      console.log("No active challenges found for the provided buildingID.");
-      return { success: true, message: "No active challenges found" };
-    }
-
-    // Process each active challenge
-    for (const challenge of activeChallenges) {
-      const challengeID = challenge.id;
-      const requiredCount = challenge.required.count;
-      console.log("Processing challenge:", challengeID);
-
-      // Get the challengeProgress document for the provided userID and challengeID
-      const challengeProgressSnapshot = await admin
-        .firestore()
-        .collection("challengeProgress")
-        .where("userID", "==", userID)
-        .where("challengeID", "==", challengeID)
-        .where("leagueID", "==", leagueID || null)
-        .get();
-
-      let challengeProgressDoc;
-      if (challengeProgressSnapshot.empty) {
-        // Create a new challengeProgress document
-        challengeProgressDoc = {
-          challengeID,
-          userID,
-          leagueID: leagueID || null,
-          isCompleted: requiredCount === 1,
-          progress: {
-            buildingID,
-            count: 1,
-          },
-        };
-        await admin
-          .firestore()
-          .collection("challengeProgress")
-          .add(challengeProgressDoc);
-        console.log(
-          "Created new challengeProgress document:",
-          challengeProgressDoc
-        );
-      } else {
-        // Update the existing challengeProgress document
-        challengeProgressDoc = challengeProgressSnapshot.docs[0];
-        if (challengeProgressDoc.data().isCompleted) {
-          console.log("Challenge progress is already completed:", challengeID);
-          continue;
-        }
-        const currentCount = challengeProgressDoc.data().progress.count;
-        const newCount = currentCount + 1;
-        const isCompleted = newCount >= requiredCount;
-
-        await challengeProgressDoc.ref.update({
-          "progress.count": newCount,
-          isCompleted,
-        });
-        console.log(
-          "Updated challengeProgress document:",
-          challengeProgressDoc.id,
-          "newCount:",
-          newCount,
-          "isCompleted:",
-          isCompleted
-        );
-      }
-
-      // Update coins field in userPoints or leagueStats
-      if (leagueID) {
-        console.log(
-          "Updating leagueStats for user:",
-          userID,
-          "leagueID:",
-          leagueID
-        );
-        console.log(
-          "Querying leagueStats with userId:",
-          userID,
-          "and leagueId:",
-          leagueID
-        );
-        const leagueStatsRef = admin
-          .firestore()
-          .collection("leagueStats")
-          .where("userId", "==", userID)
-          .where("leagueId", "==", leagueID);
-        const leagueStatsSnapshot = await leagueStatsRef.get();
-        console.log("leagueStatsSnapshot size:", leagueStatsSnapshot.size);
-
-        leagueStatsSnapshot.forEach((doc) => {
-          console.log("leagueStats document: >>", doc.id, doc.data());
-        });
-
-        if (!leagueStatsSnapshot.empty) {
-          const leagueStatsDoc = leagueStatsSnapshot.docs[0];
-
-          await leagueStatsDoc.ref.update({
-            coins: admin.firestore.FieldValue.increment(200),
-          });
-          console.log(
-            "Updated leagueStats for user:",
-            userID,
-            "leagueID:",
-            leagueID
-          );
-        } else {
-          console.log(
-            "No leagueStats document found for user:",
-            userID,
-            "leagueID:",
-            leagueID
-          );
-        }
-      } else {
-        console.log("Updating userPoints for user:", userID);
-        const userPointsRef = admin
-          .firestore()
-          .collection("userPoints")
-          .doc(userID);
-        await userPointsRef.update({
-          coins: admin.firestore.FieldValue.increment(200),
-        });
-        console.log("Updated userPoints for user:", userID);
-      }
-    }
-
-    return { success: true, message: "Building creation handled successfully" };
-  } catch (error) {
-    console.error("Error handling building creation:", error);
-    return { success: false, message: error.message };
-  }
-}
+//   try {
+//     await handleBuildingCreation(buildingID, userID, leagueID);
+//     res.json(createResponse(true, "Building creation handled successfully"));
+//   } catch (error) {
+//     console.error("Error handling building creation:", error);
+//     res
+//       .status(500)
+//       .json(createResponse(false, "An error occurred", error.message));
+//   }
+// });
 
 router.post("/create-challenge-progress", checkAuth, async (req, res) => {
-  const { challengeID, userID, buildingID, count } = req.body;
+  const { challengeID, userID, buildingID, count, leagueID } = req.body;
 
   if (!challengeID || !userID || !buildingID || !count) {
     return res
@@ -331,6 +204,7 @@ router.post("/create-challenge-progress", checkAuth, async (req, res) => {
   const challengeProgress = {
     challengeID,
     userID,
+    leagueID: leagueID || null,
     progress: {
       buildingID,
       count,
@@ -350,6 +224,18 @@ router.post("/create-challenge-progress", checkAuth, async (req, res) => {
         .json(
           createResponse(false, `No challenge found for the id: ${challengeID}`)
         );
+    }
+
+    if (leagueID) {
+      const leagueRef = admin.firestore().collection("leagues").doc(leagueID);
+      const leagueDoc = await leagueRef.get();
+      if (!leagueDoc.exists) {
+        return res
+          .status(404)
+          .json(
+            createResponse(false, `No league found for the id: ${leagueID}`)
+          );
+      }
     }
 
     await admin
@@ -426,6 +312,75 @@ router.get("/completed-challenges", checkAuth, async (req, res) => {
     );
   } catch (error) {
     console.error("Error fetching completed challenges:", error);
+    res
+      .status(500)
+      .json(createResponse(false, "An error occurred", error.message));
+  }
+});
+
+router.get("/challenge-progress", checkAuth, async (req, res) => {
+  const userID = req.user.user_id;
+  const { leagueID } = req.query;
+
+  try {
+    let query = admin
+      .firestore()
+      .collection("challengeProgress")
+      .where("userID", "==", userID);
+
+    if (leagueID) {
+      query = query.where("leagueID", "==", leagueID);
+    } else {
+      query = query.where("leagueID", "==", null);
+    }
+
+    const challengeProgressSnapshot = await query.get();
+    const challengeProgress = await Promise.all(
+      challengeProgressSnapshot.docs.map(async (doc) => {
+        const data = doc.data();
+
+        // Get building details
+        const buildingDoc = await admin
+          .firestore()
+          .collection("buildings")
+          .doc(data.progress.buildingID)
+          .get();
+        const building = buildingDoc.data();
+
+        // Get challenge details
+        const challengeDoc = await admin
+          .firestore()
+          .collection("challenges")
+          .doc(data.challengeID)
+          .get();
+        const challenge = challengeDoc.data();
+
+        // Format message
+        const title = building.title;
+        const count = challenge.required.count;
+        const message = `Build ${count} ${title}`;
+
+        return {
+          id: doc.id,
+          progress: data.progress,
+          isCompleted: data.isCompleted,
+          message,
+          requiredCount: count,
+          endTime: challenge.endTime,
+          points: challenge.points,
+        };
+      })
+    );
+
+    res.json(
+      createResponse(
+        true,
+        "Challenge progress fetched successfully",
+        challengeProgress
+      )
+    );
+  } catch (error) {
+    console.error("Error fetching challenge progress:", error);
     res
       .status(500)
       .json(createResponse(false, "An error occurred", error.message));

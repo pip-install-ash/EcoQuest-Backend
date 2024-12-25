@@ -264,9 +264,9 @@ router.post("/add-user-to-league", checkAuth, async (req, res) => {
       .status(200)
       .json(createResponse(true, "User added to league successfully", null));
   } catch (error) {
-    res;
-    console
-      .log("Error: >>", error)
+    console.log("Error: >>", error);
+
+    res
       .status(500)
       .json(createResponse(false, "Failed to add user to league", null));
   }
@@ -543,6 +543,7 @@ router.get("/details/:leagueID", checkAuth, async (req, res) => {
     const leagueData = leagueDoc.data();
 
     let ownerDetails;
+    let averageEcoPoints = 0;
     const userPointsPromises = leagueData.userIDs.map(async (userID, index) => {
       const userRef = admin.firestore().collection("userProfiles").doc(userID);
       const userDoc = await userRef.get();
@@ -552,7 +553,7 @@ router.get("/details/:leagueID", checkAuth, async (req, res) => {
       const pointsDoc = await pointsRef.get();
       const ecoPoints = pointsDoc.exists ? pointsDoc.data().ecoPoints : 0;
       const coin = pointsDoc.exists ? pointsDoc.data().coins : 0;
-
+      averageEcoPoints += ecoPoints;
       const userIsOwner = leagueData.createdBy === userID;
       if (userIsOwner) {
         ownerDetails = userDoc.data();
@@ -577,6 +578,7 @@ router.get("/details/:leagueID", checkAuth, async (req, res) => {
         userID,
       ];
     });
+    console.log("League Data>>", leagueData);
 
     const userData = await Promise.all(userPointsPromises);
 
@@ -590,6 +592,7 @@ router.get("/details/:leagueID", checkAuth, async (req, res) => {
           isPrivate: leagueData.isPrivate,
           joiningCode: leagueData.joiningCode,
           createdAt: leagueData.createdAt,
+          averageEcoPoints: averageEcoPoints / leagueData.userIDs.length,
           owner: {
             email: ownerDetails?.email || "",
             userName: ownerDetails?.userName || "",
@@ -918,6 +921,7 @@ router.post("/invite-user-to-league", checkAuth, async (req, res) => {
       isGlobal: false,
       userID: userID,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      joiningCode: leagueData.joiningCode,
     });
 
     res
