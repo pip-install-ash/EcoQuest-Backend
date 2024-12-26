@@ -1,6 +1,6 @@
 const express = require("express");
 const admin = require("firebase-admin");
-const serviceAccount = require("./keys.json");
+const serviceAccount = require("./stage-keys.json");
 const assetRoutes = require("./routes/assets");
 const pointsRoutes = require("./routes/points");
 const challenges = require("./routes/challenges");
@@ -26,7 +26,11 @@ admin.initializeApp({
 const app = express();
 const http = require("http");
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
 
 const port = process.env.PORT || 4000;
 
@@ -221,38 +225,45 @@ io.on("connection", (socket) => {
 
     const { leagueID, message, userID } = parsedData;
     console.log("leagueID", leagueID, "message", message, "userID: >>", userID);
-    socket.join(leagueID);
-    // Get user details for sender name
-    const userDoc = await admin
-      .firestore()
-      .collection("userProfiles")
-      .doc(userID)
-      .get();
-    if (!userDoc.exists) {
-      console.error("Missing userID in the received data:", parsedData);
-      return socket.emit("error", "User not found");
+
+    try {
+      if (leagueID || message || userID) {
+        // Get user details for sender name
+        const userDoc = await admin
+          .firestore()
+          .collection("userProfiles")
+          .doc(userID)
+          .get();
+        if (!userDoc.exists) {
+          console.error("Missing userID in the received data:", parsedData);
+          return socket.emit("error", "User not found");
+        }
+
+        const senderName = userDoc.data().userName || "Anonymous";
+
+        // Create message document
+        const messageDoc = {
+          senderId: userID,
+          senderName,
+          message,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        await admin
+          .firestore()
+          .collection("leagueChats")
+          .doc(leagueID)
+          .collection("messages")
+          .add(messageDoc);
+
+        // Broadcast message to the league room
+        console.log("Emitting message to league room:", leagueID);
+        io.to(leagueID).emit(leagueID, messageDoc);
+      }
+    } catch (error) {
+      console.error("Error handling sendMessage:", error);
+      socket.emit("error", "Failed to send message");
     }
-
-    const senderName = userDoc.data().userName || "Anonymous";
-
-    // Create message document
-    const messageDoc = {
-      senderId: userID,
-      senderName,
-      message,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-    };
-
-    await admin
-      .firestore()
-      .collection("leagueChats")
-      .doc(leagueID)
-      .collection("messages")
-      .add(messageDoc);
-
-    // Broadcast message to the league room
-    console.log("Emitting message to league room:", leagueID);
-    io.to(leagueID).emit(leagueID, messageDoc);
   });
 
   // Handle user disconnection
@@ -311,7 +322,7 @@ app.post("/buildings/new", checkAuth, (req, res) => {
 
 // cron.schedule(cronExpression, () => {
 //   console.log("Scheduled task running...");
-//   callRandomDisasterEndpoint();
+//   // callRandomDisasterEndpoint();
 // });
 
 // Start the server
