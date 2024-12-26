@@ -298,10 +298,58 @@ router.get("/completed-challenges", checkAuth, async (req, res) => {
     }
 
     const completedChallengesSnapshot = await query.get();
-    const completedChallenges = completedChallengesSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const completedChallenges = await Promise.all(
+      completedChallengesSnapshot.docs.map(async (doc) => {
+        const data = doc.data();
+
+        // Get building details
+        const buildingDoc = await admin
+          .firestore()
+          .collection("buildings")
+          .doc(data.progress.buildingID)
+          .get();
+        const building = buildingDoc.data();
+
+        // Get challenge details
+        const challengeDoc = await admin
+          .firestore()
+          .collection("challenges")
+          .doc(data.challengeID)
+          .get();
+        const challenge = challengeDoc.data();
+
+        // Calculate time difference
+        const endTime =
+          challenge.endTime instanceof admin.firestore.Timestamp
+            ? challenge.endTime.toDate()
+            : new Date(challenge.endTime);
+        const now = new Date();
+        const timeDiff = Math.abs(now - endTime);
+        const hoursDiff = Math.floor(timeDiff / (1000 * 60 * 60));
+        const minutesDiff = Math.floor(
+          (timeDiff % (1000 * 60 * 60)) / (1000 * 60)
+        );
+        const endTimeMessage =
+          hoursDiff > 0
+            ? `Ended ${hoursDiff} hours ago`
+            : `Ended ${minutesDiff} minutes ago`;
+
+        // Format message
+        const title = building.title;
+        const count = challenge.required.count;
+        const message = `Build ${count} ${title}`;
+
+        return {
+          id: doc.id,
+          progress: data.progress,
+          isCompleted: data.isCompleted,
+          message,
+          requiredCount: count,
+          endTime: endTimeMessage,
+          points: challenge.points,
+        };
+      })
+    );
 
     res.json(
       createResponse(
