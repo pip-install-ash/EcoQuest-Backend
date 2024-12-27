@@ -43,7 +43,7 @@ const challenges = [
   },
 ];
 
-export const createChallenge = async () => {
+const createChallenge = async () => {
   // Select a random challenge
   const randomChallenge =
     challenges[Math.floor(Math.random() * challenges.length)];

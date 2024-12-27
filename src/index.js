@@ -15,7 +15,9 @@ const notificationsRoutes = require("./routes/notifications");
 const chatRoutes = require("./routes/chat");
 const cors = require("cors");
 const { Server } = require("socket.io");
+const { createChallenge } = require("./routes/challenges");
 const cron = require("node-cron");
+const http = require("http");
 
 const checkAuth = require("./middleware/authentication");
 
@@ -24,9 +26,6 @@ admin.initializeApp({
 });
 
 const app = express();
-const http = require("http");
-const cron = require("node-cron");
-const { createChallenge } = require("./routes/challenges");
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
