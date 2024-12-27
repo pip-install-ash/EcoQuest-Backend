@@ -7,113 +7,106 @@ const router = express.Router();
 
 const challenges = [
   {
-    id: 1,
-    description: "Build 4 Residential houses",
-    progress: "1/4",
-    reward: 200,
+    buildingID: "3",
+    description: "Build 4 HouseAs",
+    requiredCount: 4,
   },
-  { id: 2, description: "Build a Factory", progress: "0/1", reward: 200 },
-  { id: 3, description: "Build a School", progress: "0/1", reward: 200 },
-  { id: 4, description: "Build a Hospital", progress: "0/1", reward: 200 },
-  { id: 5, description: "Build two Windmills", progress: "0/2", reward: 200 },
+  {
+    buildingID: "4",
+    description: "Build 4 HouseBs",
+    requiredCount: 4,
+  },
+  {
+    buildingID: "7",
+    description: "Build 1 Factory",
+    requiredCount: 1,
+  },
+  {
+    buildingID: "6",
+    description: "Build 1 School",
+    requiredCount: 1,
+  },
+  {
+    buildingID: "11",
+    description: "Build 1 Hospital",
+    requiredCount: 1,
+  },
+  {
+    buildingID: "5",
+    description: "Build 1 SkyScrapper",
+    requiredCount: 1,
+  },
+  {
+    buildingID: "10",
+    description: "Build 2 WindTurbines",
+    requiredCount: 2,
+  },
 ];
 
-router.get("/random-challenge", checkAuth, (req, res) => {
-  const randomIndex = Math.floor(Math.random() * challenges.length);
-  const randomChallenge = challenges[randomIndex];
-  res.json(
-    createResponse(
-      200,
-      "Random challenge fetched successfully",
-      randomChallenge
-    )
-  );
-});
+export const createChallenge = async () => {
+  // Select a random challenge
+  const randomChallenge =
+    challenges[Math.floor(Math.random() * challenges.length)];
 
-router.post("/create-challenge", checkAuth, async (req, res) => {
-  const { startTime, endTime, leagueID, message, required, points } = req.body;
+  // Define the startTime and endTime
+  const startTime = new Date().toISOString();
+  const endTime = new Date(new Date().getTime() + 15 * 60 * 1000).toISOString(); // 15 minutes after startTime
 
-  if (
-    !startTime ||
-    !endTime ||
-    !message ||
-    !required ||
-    typeof required !== "object" ||
-    !required.buildingID ||
-    !required.count ||
-    !points
-  ) {
-    return res
-      .status(400)
-      .json(createResponse(false, "All fields are required"));
-  }
-
+  // Construct the new challenge object
   const newChallenge = {
     startTime,
     endTime,
-    leagueID: leagueID || null,
-    message,
-    required,
-    points,
+    leagueID: null, // Will handle per league below
+    message: randomChallenge.description,
+    required: {
+      buildingID: randomChallenge.buildingID,
+      count: randomChallenge.requiredCount,
+    },
+    points: 200, // Example reward points
     isEnded: false,
   };
 
   try {
-    if (leagueID) {
-      const leagueRef = admin.firestore().collection("leagues").doc(leagueID);
-      const leagueDoc = await leagueRef.get();
-      if (!leagueDoc.exists) {
-        return res
-          .status(404)
-          .json(
-            createResponse(false, `No league found for the id: ${leagueID}`)
-          );
-      }
-    }
-
+    // Validate the building ID
     const buildingRef = admin
       .firestore()
       .collection("buildings")
-      .doc(required.buildingID);
+      .doc(newChallenge.required.buildingID);
     const buildingDoc = await buildingRef.get();
     if (!buildingDoc.exists) {
-      return res
-        .status(404)
-        .json(
-          createResponse(
-            false,
-            `No building found for the id: ${required.buildingID}`
-          )
-        );
+      throw new Error(
+        `No building found for the id: ${newChallenge.required.buildingID}`
+      );
     }
 
+    // Add the challenge to Firestore
     const challengeRef = await admin
       .firestore()
       .collection("challenges")
       .add(newChallenge);
 
-    // Fetch all users
+    // Fetch all user IDs
     const userProfilesSnapshot = await admin
       .firestore()
       .collection("userProfiles")
       .get();
     const userIds = userProfilesSnapshot.docs.map((doc) => doc.id);
 
-    // Fetch all leagues
+    // Fetch all league IDs
     const leaguesSnapshot = await admin.firestore().collection("leagues").get();
     const leagueIds = leaguesSnapshot.docs.map((doc) => doc.id);
 
     // Create challengeProgress documents
     const batch = admin.firestore().batch();
 
-    // For each user with leagueID null
+    // For each user without league
     userIds.forEach((userID) => {
       const challengeProgress = {
         challengeID: challengeRef.id,
         userID,
         leagueID: null,
         progress: {
-          buildingID: required.buildingID,
+          buildingID: newChallenge.required.buildingID,
           count: 0,
         },
         isCompleted: false,
@@ -125,15 +118,15 @@ router.post("/create-challenge", checkAuth, async (req, res) => {
       batch.set(challengeProgressRef, challengeProgress);
     });
 
-    // For each user with each leagueID
-    userIds.forEach((userID) => {
-      leagueIds.forEach((leagueID) => {
+    // For each league and user
+    leagueIds.forEach((leagueID) => {
+      userIds.forEach((userID) => {
         const challengeProgress = {
           challengeID: challengeRef.id,
           userID,
           leagueID,
           progress: {
-            buildingID: required.buildingID,
+            buildingID: newChallenge.required.buildingID,
             count: 0,
           },
           isCompleted: false,
@@ -146,6 +139,7 @@ router.post("/create-challenge", checkAuth, async (req, res) => {
       });
     });
 
+    // Commit batch writes
     await batch.commit();
 
     // Create the notification document
@@ -159,16 +153,19 @@ router.post("/create-challenge", checkAuth, async (req, res) => {
     };
     await admin.firestore().collection("notifications").add(notificationDoc);
 
-    res.json(
-      createResponse(true, "Challenge created successfully", {
-        id: challengeRef.id,
-      })
-    );
+    return { id: challengeRef.id };
   } catch (error) {
-    console.error("Error creating challenge:", error);
-    res
-      .status(500)
-      .json(createResponse(false, "An error occurred", error.message));
+    throw new Error(`Error creating challenge: ${error.message}`);
+  }
+};
+
+router.post("/create-challenge", checkAuth, async (req, res) => {
+  try {
+    const result = await createChallenge();
+    res.json(createResponse(true, "Challenge created successfully", result));
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json(createResponse(false, error.message));
   }
 });
 
