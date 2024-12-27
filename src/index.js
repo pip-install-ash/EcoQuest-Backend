@@ -25,6 +25,8 @@ admin.initializeApp({
 
 const app = express();
 const http = require("http");
+const cron = require("node-cron");
+const { createChallenge } = require("./routes/challenges");
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -318,12 +320,27 @@ app.post("/buildings/new", checkAuth, (req, res) => {
 // Schedule the function to run on a random day of the week at a specific time
 // const cronExpression = `0 0 * * ${randomDay}`; // At 00:00 (midnight) on the random day of the week
 
-// const cronExpression = `*/5 * * * *`; // Every 5 minutes
+// Schedule the function to run 2-3 times a day at random times
+const scheduleRandomChallenge = () => {
+  const times = [];
+  const numTimes = Math.floor(Math.random() * 2) + 2; // 2 or 3 times a day
 
-// cron.schedule(cronExpression, () => {
-//   console.log("Scheduled task running...");
-//   // callRandomDisasterEndpoint();
-// });
+  for (let i = 0; i < numTimes; i++) {
+    const hour = Math.floor(Math.random() * 24);
+    const minute = Math.floor(Math.random() * 60);
+    times.push({ hour, minute });
+  }
+
+  times.forEach((time) => {
+    const cronExpression = `${time.minute} ${time.hour} * * *`;
+    cron.schedule(cronExpression, () => {
+      console.log(`Scheduled task running at ${time.hour}:${time.minute}...`);
+      createChallenge();
+    });
+  });
+};
+
+scheduleRandomChallenge();
 
 // Start the server
 server.listen(port, () => {
