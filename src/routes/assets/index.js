@@ -10,28 +10,46 @@ router.post(
   "/user/days-based-points-calculation",
   checkAuth,
   async (req, res) => {
-    const { userId, buildingId, leagueId, noOfDays } = req.body;
+    const userId = req.user.user_id;
+    const { leagueId, noOfDays } = req.body;
 
-    if (!userId || !buildingId) {
-      return res
-        .status(400)
-        .json(createResponse(false, "userId and buildingId are required"));
+    if (!userId) {
+      return res.status(400).json(createResponse(false, "userId is required"));
     }
 
     try {
-      const data = await calculateUserPoints(
-        userId,
-        buildingId,
-        leagueId,
-        noOfDays
-      );
+      const userAssetsSnapshot = await admin
+        .firestore()
+        .collection("userAssets")
+        .where("userId", "==", userId)
+        .where("leagueId", "==", leagueId || "")
+        .get();
+
+      const userAssets = userAssetsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      const buildingIds = userAssets.map((asset) => asset.buildingId);
+      const data = [];
+
+      for (const buildingId of buildingIds) {
+        const calculatedPoints = await calculateUserPoints(
+          userId,
+          buildingId,
+          leagueId,
+          noOfDays
+        );
+        data.push(calculatedPoints);
+      }
+
       return res
         .status(200)
         .json(
           createResponse(
             true,
             `User points calculated successfully for ${noOfDays} day(s)`,
-            data
+            data[buildingIds.length - 1]
           )
         );
     } catch (error) {
@@ -45,6 +63,7 @@ router.post(
 
 const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
   try {
+    const increaseStats = noOfDays;
     // If noOfDays is not provided, set it to 1
     noOfDays = noOfDays || 1;
 
@@ -67,20 +86,25 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
       }
       const userPoints = userDoc.data();
 
+      const coinCalculation = increaseStats
+        ? (buildData?.earning || 0) * noOfDays +
+          (userPoints?.coins - buildData.taxIncome * noOfDays)
+        : userPoints?.coins - (buildData.cost + buildData.taxIncome);
+
       pointsData = {
-        coins:
-          userPoints.coins -
-          (buildData.cost + buildData.taxIncome) +
-          buildData.earning,
+        coins: coinCalculation,
         ecoPoints:
           userPoints.ecoPoints - (buildData?.ecoPoints || 0) * noOfDays,
         electricity:
           userPoints.electricity - buildData.electricityConsumption * noOfDays,
         garbage: userPoints.garbage + buildData.wasteProduce * noOfDays,
-        population:
-          userPoints.population + buildData.residentCapacity * noOfDays,
         water: userPoints.water - buildData.waterUsage * noOfDays,
       };
+
+      if (!increaseStats) {
+        pointsData.population =
+          userPoints.population + buildData.residentCapacity * noOfDays;
+      }
 
       await userDocRef.update(pointsData);
     } else {
@@ -98,24 +122,28 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
 
       const leagueStats = leagueStatsDoc.docs[0].data();
 
+      const coinCalculation = increaseStats
+        ? (buildData?.earning || 0) * noOfDays +
+          (leagueStats?.coins - buildData.taxIncome * noOfDays)
+        : leagueStats?.coins - (buildData.cost + buildData.taxIncome);
+
       pointsData = {
-        coins:
-          leagueStats.coins -
-          (buildData.cost + buildData.taxIncome) +
-          buildData.earning,
+        coins: coinCalculation,
         ecoPoints:
           leagueStats.ecoPoints - (buildData?.ecoPoints || 0) * noOfDays,
         electricity:
           leagueStats.electricity - buildData.electricityConsumption * noOfDays,
         garbage: leagueStats.garbage + buildData.wasteProduce * noOfDays,
-        population:
-          leagueStats.population + buildData.residentCapacity * noOfDays,
         water: leagueStats.water - buildData.waterUsage * noOfDays,
       };
 
+      if (!increaseStats) {
+        pointsData.population =
+          leagueStats.population + buildData.residentCapacity * noOfDays;
+      }
+
       await leagueStatsDoc.docs[0].ref.update(pointsData);
     }
-
     return pointsData;
   } catch (error) {
     console.error("Error calculating user points:", error);
@@ -245,16 +273,6 @@ router.delete("/user/assets", checkAuth, async (req, res) => {
 
 async function handleBuildingCreation(buildingID, userID, leagueID = null) {
   try {
-    console.log("Starting handleBuildingCreation function");
-    console.log(
-      "buildingID:",
-      buildingID,
-      "userID:",
-      userID,
-      "leagueID:",
-      leagueID
-    );
-
     // Get all challenges with isEnded: false
     const challengesSnapshot = await admin
       .firestore()
@@ -369,18 +387,6 @@ async function handleBuildingCreation(buildingID, userID, leagueID = null) {
 
       // Update coins field in userPoints or leagueStats
       if (leagueID) {
-        console.log(
-          "Updating leagueStats for user:",
-          userID,
-          "leagueID:",
-          leagueID
-        );
-        console.log(
-          "Querying leagueStats with userId:",
-          userID,
-          "and leagueId:",
-          leagueID
-        );
         const leagueStatsRef = admin
           .firestore()
           .collection("leagueStats")
