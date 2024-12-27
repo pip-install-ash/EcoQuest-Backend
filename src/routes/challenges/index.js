@@ -8,37 +8,37 @@ const router = express.Router();
 const challenges = [
   {
     buildingID: "3",
-    description: "Build 4 HouseAs",
+    description: "HouseAs",
     requiredCount: 4,
   },
   {
     buildingID: "4",
-    description: "Build 4 HouseBs",
+    description: "HouseBs",
     requiredCount: 4,
   },
   {
     buildingID: "7",
-    description: "Build 1 Factory",
+    description: "Factory",
     requiredCount: 1,
   },
   {
     buildingID: "6",
-    description: "Build 1 School",
+    description: "School",
     requiredCount: 1,
   },
   {
     buildingID: "11",
-    description: "Build 1 Hospital",
+    description: "Hospital",
     requiredCount: 1,
   },
   {
     buildingID: "5",
-    description: "Build 1 SkyScrapper",
+    description: "SkyScrapper",
     requiredCount: 1,
   },
   {
     buildingID: "10",
-    description: "Build 2 WindTurbines",
+    description: "WindTurbines",
     requiredCount: 2,
   },
 ];
@@ -47,7 +47,7 @@ export const createChallenge = async () => {
   // Select a random challenge
   const randomChallenge =
     challenges[Math.floor(Math.random() * challenges.length)];
-
+  const randomCount = Math.floor(Math.random() * 9) + 1;
   // Define the startTime and endTime
   const startTime = new Date().toISOString();
   const endTime = new Date(new Date().getTime() + 15 * 60 * 1000).toISOString(); // 15 minutes after startTime
@@ -57,10 +57,10 @@ export const createChallenge = async () => {
     startTime,
     endTime,
     leagueID: null, // Will handle per league below
-    message: randomChallenge.description,
+    message: `Build ${randomCount} ${randomChallenge.description}`,
     required: {
       buildingID: randomChallenge.buildingID,
-      count: randomChallenge.requiredCount,
+      count: randomCount,
     },
     points: 200, // Example reward points
     isEnded: false,
