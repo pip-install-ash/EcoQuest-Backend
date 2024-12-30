@@ -549,10 +549,20 @@ router.get("/details/:leagueID", checkAuth, async (req, res) => {
       const userDoc = await userRef.get();
       const userName = userDoc.exists ? userDoc.data().userName : "Unknown";
 
-      const pointsRef = admin.firestore().collection("userPoints").doc(userID);
-      const pointsDoc = await pointsRef.get();
-      const ecoPoints = pointsDoc.exists ? pointsDoc.data().ecoPoints : 0;
-      const coin = pointsDoc.exists ? pointsDoc.data().coins : 0;
+      const pointsRef = admin
+        .firestore()
+        .collection("leagueStats")
+        .where("leagueId", "==", leagueID)
+        .where("userId", "==", userID);
+
+      const pointsSnapshot = await pointsRef.get();
+      let ecoPoints = 0;
+      let coin = 0;
+      if (!pointsSnapshot.empty) {
+        const pointsDoc = pointsSnapshot.docs[0];
+        ecoPoints = pointsDoc.data().ecoPoints || 0;
+        coin = pointsDoc.data().coins || 0;
+      }
       averageEcoPoints += ecoPoints;
       const userIsOwner = leagueData.createdBy === userID;
       if (userIsOwner) {

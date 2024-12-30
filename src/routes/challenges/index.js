@@ -384,44 +384,74 @@ router.get("/challenge-progress", checkAuth, async (req, res) => {
       challengeProgressSnapshot.docs.map(async (doc) => {
         const data = doc.data();
 
-        // Get building details
-        const buildingDoc = await admin
-          .firestore()
-          .collection("buildings")
-          .doc(data.progress.buildingID)
-          .get();
-        const building = buildingDoc.data();
+        try {
+          // Get building details with null check
+          const buildingDoc = await admin
+            .firestore()
+            .collection("buildings")
+            .doc(data.progress.buildingID)
+            .get();
 
-        // Get challenge details
-        const challengeDoc = await admin
-          .firestore()
-          .collection("challenges")
-          .doc(data.challengeID)
-          .get();
-        const challenge = challengeDoc.data();
+          if (!buildingDoc.exists) {
+            console.error(
+              `Building not found for ID: ${data.progress.buildingID}`
+            );
+            return null;
+          }
 
-        // Format message
-        const title = building.title;
-        const count = challenge.required.count;
-        const message = `Build ${count} ${title}`;
+          const building = buildingDoc.data();
 
-        return {
-          id: doc.id,
-          progress: data.progress,
-          isCompleted: data.isCompleted,
-          message,
-          requiredCount: count,
-          endTime: challenge.endTime,
-          points: challenge.points,
-        };
+          // Get challenge details with null check
+          const challengeDoc = await admin
+            .firestore()
+            .collection("challenges")
+            .doc(data.challengeID)
+            .get();
+
+          if (!challengeDoc.exists) {
+            console.error(`Challenge not found for ID: ${data.challengeID}`);
+            return null;
+          }
+
+          const challenge = challengeDoc.data();
+
+          // Null checks for required data
+          if (!building?.title || !challenge?.required?.count) {
+            console.error("Missing required building or challenge data");
+            return null;
+          }
+
+          // Format message
+          const title = building.title;
+          const count = challenge.required.count;
+          const message = `Build ${count} ${title}`;
+
+          return {
+            id: doc.id,
+            progress: data.progress,
+            isCompleted: data.isCompleted,
+            message,
+            requiredCount: count,
+            endTime: challenge.endTime,
+            points: challenge.points,
+          };
+        } catch (error) {
+          console.error("Error processing challenge progress item:", error);
+          return null;
+        }
       })
     );
+
+    // Filter out null values from failed processing
+    const validChallengeProgress = challengeProgress
+      .filter((item) => item !== null && new Date(item.endTime) > new Date())
+      .sort((a, b) => new Date(a.endTime) - new Date(b.endTime));
 
     res.json(
       createResponse(
         true,
         "Challenge progress fetched successfully",
-        challengeProgress
+        validChallengeProgress
       )
     );
   } catch (error) {
