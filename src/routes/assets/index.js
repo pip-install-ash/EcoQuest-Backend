@@ -181,7 +181,7 @@ router.post("/user/assets", checkAuth, async (req, res) => {
     y,
     userId: req.user.user_id,
     leagueId: leagueId || "",
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date().toISOString(),
   };
   const assetId = assetRef.id;
 

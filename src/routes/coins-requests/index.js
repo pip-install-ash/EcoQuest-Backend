@@ -29,7 +29,7 @@ router.post("/request-coins", checkAuth, async (req, res) => {
       userID,
       coinsRequested,
       isAccepted: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
     };
 
     const docRef = await admin
@@ -52,11 +52,17 @@ router.post("/request-coins", checkAuth, async (req, res) => {
 router.post("/send-coins/:coinsRequestID", checkAuth, async (req, res) => {
   const senderID = req.user.user_id;
   const { coinsRequestID } = req.params;
+  const { electricity, water, coins } = req.body;
 
-  if (!coinsRequestID) {
+  if (
+    !coinsRequestID ||
+    electricity == null ||
+    water == null ||
+    coins == null
+  ) {
     return res
       .status(400)
-      .json(createResponse(false, "Missing coinsRequestID"));
+      .json(createResponse(false, "Missing required fields"));
   }
 
   const coinsRequestDoc = await admin
@@ -74,7 +80,6 @@ router.post("/send-coins/:coinsRequestID", checkAuth, async (req, res) => {
   const requestData = coinsRequestDoc.data();
   const requestingUserID = requestData.userID;
   const leagueID = requestData.leagueID;
-  const coinsRequested = requestData.coinsRequested;
 
   if (requestData.isAccepted) {
     return res
@@ -122,47 +127,44 @@ router.post("/send-coins/:coinsRequestID", checkAuth, async (req, res) => {
       typeof senderUserData.electricity !== "number" ||
       typeof senderUserData.water !== "number" ||
       typeof senderUserData.coins !== "number" ||
-      senderUserData.electricity < coinsRequested.electricity ||
-      senderUserData.water < coinsRequested.water ||
-      senderUserData.coins < coinsRequested.money
+      senderUserData.electricity < electricity ||
+      senderUserData.water < water ||
+      senderUserData.coins < coins
     ) {
       return res
         .status(400)
-        .json(createResponse(false, "Sender does not have enough coins"));
+        .json(createResponse(false, "Sender does not have enough resources"));
     }
 
-    // Update the requesting user's coins
+    // Update the requesting user's resources
     await requestingUserDoc.ref.update({
-      electricity: admin.firestore.FieldValue.increment(
-        coinsRequested.electricity
-      ),
-      water: admin.firestore.FieldValue.increment(coinsRequested.water),
-      coins: admin.firestore.FieldValue.increment(coinsRequested.money),
+      electricity: admin.firestore.FieldValue.increment(electricity),
+      water: admin.firestore.FieldValue.increment(water),
+      coins: admin.firestore.FieldValue.increment(coins),
     });
 
-    // Update the sender's coins
+    // Update the sender's resources
     await senderUserDoc.ref.update({
-      electricity: admin.firestore.FieldValue.increment(
-        -coinsRequested.electricity
-      ),
-      water: admin.firestore.FieldValue.increment(-coinsRequested.water),
-      coins: admin.firestore.FieldValue.increment(-coinsRequested.money),
+      electricity: admin.firestore.FieldValue.increment(-electricity),
+      water: admin.firestore.FieldValue.increment(-water),
+      coins: admin.firestore.FieldValue.increment(-coins),
     });
 
-    // Update the isAccepted field in coinsRequests
-    const coinsRequestsSnapshot = await admin
-      .firestore()
-      .collection("coinsRequests")
-      .where("userID", "==", requestingUserID)
-      .where("leagueID", "==", leagueID)
-      .get();
+    // Deduct the requested resources from the coinsRequestDoc
+    const updatedElectricity =
+      requestData.coinsRequested.electricity - electricity;
+    const updatedWater = requestData.coinsRequested.water - water;
+    const updatedCoins = requestData.coinsRequested.money - coins;
 
-    if (!coinsRequestsSnapshot.empty) {
-      const coinsRequestDoc = coinsRequestsSnapshot.docs[0];
-      await coinsRequestDoc.ref.update({
-        isAccepted: true,
-      });
-    }
+    const isAccepted =
+      updatedElectricity <= 0 && updatedWater <= 0 && updatedCoins <= 0;
+
+    await coinsRequestDoc.ref.update({
+      "coinsRequested.electricity": updatedElectricity,
+      "coinsRequested.water": updatedWater,
+      "coinsRequested.money": updatedCoins,
+      isAccepted,
+    });
 
     // Fetch sender's user profile to get the user name
     const senderProfileSnapshot = await admin
@@ -182,7 +184,7 @@ router.post("/send-coins/:coinsRequestID", checkAuth, async (req, res) => {
 
     // Create the notification document
     const notificationDoc = {
-      message: `Resources received: ${coinsRequested.money} GOLD, ${coinsRequested.electricity}KW, ${coinsRequested.water} LITER, from ${senderName}`,
+      message: `Resources received: ${coins} GOLD, ${electricity}KW, ${water} LITER, from ${senderName}`,
       notificationType: "resourcesReceived",
       isGlobal: false,
       userID: requestingUserID,
@@ -192,9 +194,9 @@ router.post("/send-coins/:coinsRequestID", checkAuth, async (req, res) => {
 
     return res
       .status(200)
-      .json(createResponse(true, "Coins transferred successfully"));
+      .json(createResponse(true, "Resources transferred successfully"));
   } catch (error) {
-    console.error("Error transferring coins:", error);
+    console.error("Error transferring resources:", error);
     return res.status(500).json(createResponse(false, "Internal server error"));
   }
 });

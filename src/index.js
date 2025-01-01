@@ -80,7 +80,7 @@ app.post("/register", async (req, res) => {
       userName,
       email,
       gameInitMap: "",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
     });
 
     return res.status(201).json({
@@ -282,7 +282,7 @@ app.post("/buildings/new", checkAuth, (req, res) => {
   const buildingRef = db.collection("buildings").doc();
 
   const data = {
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date().toISOString(),
   };
   // for optional data
   if (buildingId !== undefined) data.buildingId = buildingId;

@@ -35,16 +35,32 @@ router.get("/all-notifications", checkAuth, async (req, res) => {
       return "Just now";
     };
 
+    const formatResourcesReceivedMessage = (message) => {
+      const parts = message.match(
+        /Resources received: (\d+) GOLD, (\d+)KW, (\d+) LITER, from (.+)/
+      );
+      if (parts) {
+        const [_, gold, kw, liter, from] = parts;
+        return `Resource received : <span style='color: #E99A45;'>+${gold} gold</span>, <span style='color: #1e90ff;'>+${kw}KW</span>, ${liter} LITER, from<br>(${from})`;
+      }
+      return message;
+    };
+
+    const formatChallengeMessage = (message) => {
+      return `New echo challenge: Complete the challenge to get <span style='color: #10EE1A;'>+20 coins</span> reward.`;
+    };
+
     globalNotificationsSnapshot.forEach((doc) => {
       const data = doc.data();
       notifications.push({
         notificationType: data.notificationType,
-        message: data.message,
-        time: calculateTimeAgo(
-          data.createdAt instanceof admin.firestore.Timestamp
-            ? data.createdAt.toDate()
-            : new Date(data.createdAt)
-        ),
+        message:
+          data.notificationType === "resourcesReceived"
+            ? formatResourcesReceivedMessage(data.message)
+            : data.notificationType === "challenge"
+            ? formatChallengeMessage(data.message)
+            : data.message,
+        time: calculateTimeAgo(new Date(data.createdAt)),
       });
     });
 
@@ -52,8 +68,13 @@ router.get("/all-notifications", checkAuth, async (req, res) => {
       const data = doc.data();
       notifications.push({
         notificationType: data.notificationType,
-        message: data.message,
-        time: calculateTimeAgo(data.createdAt.toDate()),
+        message:
+          data.notificationType === "resourcesReceived"
+            ? formatResourcesReceivedMessage(data.message)
+            : data.notificationType === "challenge"
+            ? formatChallengeMessage(data.message)
+            : data.message,
+        time: calculateTimeAgo(new Date(data.createdAt)),
       });
     });
 

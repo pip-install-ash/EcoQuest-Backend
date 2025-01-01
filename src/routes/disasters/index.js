@@ -132,7 +132,7 @@ router.get("/random-disaster", checkAuth, async (req, res) => {
       message: `Destruction caused by ${randomDisaster}`,
       affectedUsersList: disasterResponse,
       disasterType: randomDisaster,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
     };
     await admin.firestore().collection("disasters").add(disasterDoc);
 

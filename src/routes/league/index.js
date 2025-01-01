@@ -29,7 +29,7 @@ async function setDefaultStatsValue({
     population: population || 0,
     water: water || 200,
     gameInitMap: "",
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date().toISOString(),
   });
 }
 
@@ -148,13 +148,13 @@ router.post("/create", checkAuth, async (req, res) => {
         createdBy,
         isPrivate: isPrivate || false,
         joiningCode, // Add the joining code if applicable
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: new Date().toISOString(),
       });
 
     await setDefaultStatsValue({
       leagueId: leagueRef.id,
       userId: createdBy,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
     });
 
     res.status(201).json(
@@ -258,7 +258,7 @@ router.post("/add-user-to-league", checkAuth, async (req, res) => {
     await setDefaultStatsValue({
       leagueId: leagueRef.id,
       userId: userID,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
     });
     res
       .status(200)
@@ -444,7 +444,7 @@ router.post("/join-private-league", checkAuth, async (req, res) => {
     await setDefaultStatsValue({
       leagueId: leaguesRef.id,
       userId: userID,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
     });
 
     res
@@ -503,7 +503,7 @@ router.post("/join-public-league", checkAuth, async (req, res) => {
     await setDefaultStatsValue({
       leagueId: leagueRef.id,
       userId: userID,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
     });
 
     res
@@ -922,11 +922,36 @@ router.post("/invite-user-to-league", checkAuth, async (req, res) => {
     const leagueDoc = leagueSnapshot.docs[0];
     const leagueData = leagueDoc.data();
 
+    const notificationQuery = admin
+      .firestore()
+      .collection("notifications")
+      .where("userID", "==", userID)
+      .where("joiningCode", "==", leagueData.joiningCode)
+      .where("notificationType", "==", "leagueInvitation");
+
+    const notificationSnapshot = await notificationQuery.get();
+
+    if (!notificationSnapshot.empty) {
+      return res
+        .status(400)
+        .json(
+          createResponse(false, "User already invited to the league", null)
+        );
+    }
+
+    const senderUserID = req.user.user_id;
+    const senderUserRef = admin
+      .firestore()
+      .collection("userProfiles")
+      .doc(senderUserID);
+    const senderUserDoc = await senderUserRef.get();
+    const senderUserName = senderUserDoc.exists
+      ? senderUserDoc.data().userName
+      : "Unknown";
+
     const notificationRef = admin.firestore().collection("notifications").doc();
     await notificationRef.set({
-      message: `${userDoc.data().userName} invited you to the league: ${
-        leagueData.leagueName
-      }`,
+      message: `${senderUserName} invited you to the league: ${leagueData.leagueName}`,
       notificationType: "leagueInvitation",
       isGlobal: false,
       userID: userID,

@@ -43,7 +43,7 @@ async function setDefaultStatsValue({
     population: population || 0,
     water: water || 200,
     gameInitMap: "",
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: new Date().toISOString(),
   });
 }
 
