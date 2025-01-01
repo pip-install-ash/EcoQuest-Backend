@@ -247,7 +247,7 @@ io.on("connection", (socket) => {
           senderId: userID,
           senderName,
           message,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          timestamp: new Date().toISOString(),
         };
 
         await admin

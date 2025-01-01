@@ -186,7 +186,7 @@ router.post("/send-coins/:coinsRequestID", checkAuth, async (req, res) => {
       notificationType: "resourcesReceived",
       isGlobal: false,
       userID: requestingUserID,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
     };
     await admin.firestore().collection("notifications").add(notificationDoc);
 

@@ -930,7 +930,7 @@ router.post("/invite-user-to-league", checkAuth, async (req, res) => {
       notificationType: "leagueInvitation",
       isGlobal: false,
       userID: userID,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
       joiningCode: leagueData.joiningCode,
     });
 

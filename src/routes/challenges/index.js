@@ -149,7 +149,7 @@ const createChallenge = async () => {
       notificationType: "challenge",
       isGlobal: true,
       userID: null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
     };
     await admin.firestore().collection("notifications").add(notificationDoc);
 

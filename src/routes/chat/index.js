@@ -25,10 +25,13 @@ router.get("/messages/:leagueId", checkAuth, async (req, res) => {
     }
 
     const messagesSnapshot = await query.get();
-    const messages = messagesSnapshot.docs.map((doc) => ({
+    let messages = messagesSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
+
+    // Sort messages in descending order based on createdAt
+    messages.sort((a, b) => b.createdAt - a.createdAt);
 
     res.json(createResponse(true, "Messages fetched successfully", messages));
   } catch (error) {

@@ -142,7 +142,7 @@ router.get("/random-disaster", checkAuth, async (req, res) => {
       notificationType: "disaster",
       isGlobal: true,
       userID: null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
     };
     await admin.firestore().collection("notifications").add(notificationDoc);
 

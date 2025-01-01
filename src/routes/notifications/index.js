@@ -22,12 +22,39 @@ router.get("/all-notifications", checkAuth, async (req, res) => {
 
     const notifications = [];
 
+    const calculateTimeAgo = (date) => {
+      const now = new Date();
+      const diff = now - date;
+      const minutes = Math.floor(diff / 60000);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+
+      if (days > 0) return `${days} day(s) ago`;
+      if (hours > 0) return `${hours} hour(s) ago`;
+      if (minutes > 0) return `${minutes} minute(s) ago`;
+      return "Just now";
+    };
+
     globalNotificationsSnapshot.forEach((doc) => {
-      notifications.push({ id: doc.id, ...doc.data() });
+      const data = doc.data();
+      notifications.push({
+        notificationType: data.notificationType,
+        message: data.message,
+        time: calculateTimeAgo(
+          data.createdAt instanceof admin.firestore.Timestamp
+            ? data.createdAt.toDate()
+            : new Date(data.createdAt)
+        ),
+      });
     });
 
     userNotificationsSnapshot.forEach((doc) => {
-      notifications.push({ id: doc.id, ...doc.data() });
+      const data = doc.data();
+      notifications.push({
+        notificationType: data.notificationType,
+        message: data.message,
+        time: calculateTimeAgo(data.createdAt.toDate()),
+      });
     });
 
     return res
