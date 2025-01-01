@@ -31,7 +31,7 @@ router.get("/messages/:leagueId", checkAuth, async (req, res) => {
     }));
 
     // Sort messages in descending order based on createdAt
-    messages.sort((a, b) => b.createdAt - a.createdAt);
+    messages.sort((a, b) => a.createdAt - b.createdAt);
 
     res.json(createResponse(true, "Messages fetched successfully", messages));
   } catch (error) {
