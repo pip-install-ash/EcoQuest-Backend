@@ -313,4 +313,69 @@ router.get("/all-disasters", checkAuth, async (req, res) => {
   }
 });
 
+router.get("/user-destructions", checkAuth, async (req, res) => {
+  try {
+    const userId = req.user.user_id;
+    const { leagueId } = req.query;
+
+    const disastersSnapshot = await admin
+      .firestore()
+      .collection("disasters")
+      .get();
+    const allDisasters = disastersSnapshot.docs.map((doc) => {
+      const data = doc.data();
+      const createdAt = data.createdAt.toDate();
+      const now = new Date();
+      const hoursPassed = Math.floor((now - createdAt) / (1000 * 60 * 60));
+      const time = `Ended ${hoursPassed} hour${
+        hoursPassed !== 1 ? "s" : ""
+      } ago`;
+
+      return { ...data, time };
+    });
+
+    const userDestructions = allDisasters
+      .map((disaster) => {
+        const filteredDestructions = disaster.affectedUsersList.filter(
+          (item) => {
+            if (leagueId) {
+              return item.userId === userId && item.leagueId === leagueId;
+            } else {
+              return (
+                item.userId === userId &&
+                (!item.leagueId || item.leagueId === "")
+              );
+            }
+          }
+        );
+
+        return filteredDestructions.map((item) => ({
+          disaster: disaster.disasterType,
+          destruction: item.destruction,
+          destructionMessage: formatDestructionMessage(item.destruction),
+          time: disaster.time,
+        }));
+      })
+      .flat();
+
+    if (userDestructions.length === 0) {
+      const message = leagueId
+        ? "No destructions found for user in the league"
+        : "No destructions found for user";
+      return res.status(404).json(createResponse(false, message));
+    }
+
+    const message = leagueId
+      ? "All destructions for user in the league retrieved successfully"
+      : "All destructions for user retrieved successfully";
+
+    res.json(createResponse(true, message, userDestructions));
+  } catch (error) {
+    console.error("Error getting user/league destructions:", error);
+    res
+      .status(500)
+      .json(createResponse(false, "An error occurred", error.message));
+  }
+});
+
 module.exports = router;
