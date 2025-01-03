@@ -205,7 +205,9 @@ router.get("/user-destruction/:disasterId", checkAuth, async (req, res) => {
       return {
         ...itemWithoutIds,
         destructionMessage: formatDestructionMessage(item.destruction),
-        endedAt: `Ended ${hoursPassed} hour${hoursPassed !== 1 ? "s" : ""} ago`,
+        endedAt: `Ended: ${hoursPassed} hour${
+          hoursPassed !== 1 ? "s" : ""
+        } ago`,
       };
     });
 
@@ -261,7 +263,7 @@ router.get(
         return {
           ...itemWithoutIds,
           destructionMessage: formatDestructionMessage(item.destruction),
-          endedAt: `Ended ${hoursPassed} hour${
+          endedAt: `Ended: ${hoursPassed} hour${
             hoursPassed !== 1 ? "s" : ""
           } ago`,
         };
@@ -300,7 +302,9 @@ router.get("/all-disasters", checkAuth, async (req, res) => {
       return {
         id: doc.id,
         disaster: data.disasterType,
-        endedAt: `Ended ${hoursPassed} hour${hoursPassed !== 1 ? "s" : ""} ago`,
+        endedAt: `Ended: ${hoursPassed} hour${
+          hoursPassed !== 1 ? "s" : ""
+        } ago`,
       };
     });
 
@@ -317,6 +321,7 @@ router.get("/user-destructions", checkAuth, async (req, res) => {
   try {
     const userId = req.user.user_id;
     const { leagueId } = req.query;
+    console.log("userID>>>", userId);
 
     const disastersSnapshot = await admin
       .firestore()
@@ -327,7 +332,7 @@ router.get("/user-destructions", checkAuth, async (req, res) => {
       const createdAt = data.createdAt.toDate();
       const now = new Date();
       const hoursPassed = Math.floor((now - createdAt) / (1000 * 60 * 60));
-      const time = `Ended ${hoursPassed} hour${
+      const time = `Ended: ${hoursPassed} hour${
         hoursPassed !== 1 ? "s" : ""
       } ago`;
 

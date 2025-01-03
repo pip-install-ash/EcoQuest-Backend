@@ -10,9 +10,9 @@ const createResponse = require("../../utils/helper-functions");
  * @param {string} params.leagueId - The ID of the league.
  * @param {string} params.userId - The ID of the user.
  * @param {string} [params.lastLogined] - The last login time of the user.
- * @param {number} [params.coins=200000] - The number of coins.
+ * @param {number} [params.coins=2000] - The number of coins.
  * @param {number} [params.ecoPoints=200] - The number of eco points.
- * @param {number} [params.electricity=200000] - The amount of electricity.
+ * @param {number} [params.electricity=100] - The amount of electricity.
  * @param {number} [params.garbage=0] - The amount of garbage.
  * @param {number} [params.population=0] - The population count.
  * @param {number} [params.water=200] - The amount of water.
@@ -36,12 +36,12 @@ async function setDefaultStatsValue({
     leagueId,
     userId,
     lastLogined: lastLogined || "",
-    coins: coins || 200000,
-    ecoPoints: ecoPoints || 200,
-    electricity: electricity || 200000,
+    coins: coins || 200,
+    ecoPoints: ecoPoints || 100,
+    electricity: electricity || 100,
     garbage: garbage || 0,
     population: population || 0,
-    water: water || 200,
+    water: water || 100,
     gameInitMap: "",
     createdAt: new Date().toISOString(),
   });
