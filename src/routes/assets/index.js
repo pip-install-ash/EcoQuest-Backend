@@ -94,11 +94,21 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
       pointsData = {
         coins: coinCalculation,
         ecoPoints:
-          userPoints.ecoPoints - (buildData?.ecoPoints || 0) * noOfDays,
+          (userPoints.ecoPoints || 0) +
+          (buildData?.ecoEarning || 0) * noOfDays -
+          (buildData?.ecoPoints || 0) * noOfDays,
         electricity:
-          userPoints.electricity - buildData.electricityConsumption * noOfDays,
-        garbage: userPoints.garbage + buildData.wasteProduce * noOfDays,
-        water: userPoints.water - buildData.waterUsage * noOfDays,
+          (userPoints.electricity || 0) +
+          (buildData?.eleEarning || 0) * noOfDays -
+          buildData.electricityConsumption * noOfDays,
+        garbage:
+          userPoints.garbage +
+          (buildData?.wasteProduce || 0) * noOfDays -
+          (buildData?.wasteRemoval || 0) * noOfDays,
+        water:
+          (userPoints.water || 0) +
+          (buildData?.waterEarning || 0) * noOfDays -
+          buildData.waterUsage * noOfDays,
       };
 
       if (!increaseStats) {
@@ -121,6 +131,7 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
       }
 
       const leagueStats = leagueStatsDoc.docs[0].data();
+      console.log(leagueStats.ecoPoints, "buildData", buildData);
 
       const coinCalculation = increaseStats
         ? (buildData?.earning || 0) * noOfDays +
@@ -130,11 +141,21 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
       pointsData = {
         coins: coinCalculation,
         ecoPoints:
-          leagueStats.ecoPoints - (buildData?.ecoPoints || 0) * noOfDays,
+          (leagueStats.ecoPoints || 0) +
+          (buildData?.ecoEarning || 0) * noOfDays -
+          (buildData?.ecoPoints || 0) * noOfDays,
         electricity:
-          leagueStats.electricity - buildData.electricityConsumption * noOfDays,
-        garbage: leagueStats.garbage + buildData.wasteProduce * noOfDays,
-        water: leagueStats.water - buildData.waterUsage * noOfDays,
+          leagueStats.electricity +
+          (buildData?.eleEarning || 0) * noOfDays -
+          buildData.electricityConsumption * noOfDays,
+        garbage:
+          leagueStats.garbage +
+          (buildData?.wasteProduce || 0) * noOfDays -
+          (buildData?.wasteRemoval || 0) * noOfDays,
+        water:
+          leagueStats.water +
+          (buildData?.waterEarning || 0) * noOfDays -
+          buildData.waterUsage * noOfDays,
       };
 
       if (!increaseStats) {
@@ -284,7 +305,6 @@ async function handleBuildingCreation(buildingID, userID, leagueID = null) {
       id: doc.id,
       ...doc.data(),
     }));
-    console.log("Fetched challenges:", challenges);
 
     // Update isEnded to true for challenges where endTime has passed
     const now = new Date();
