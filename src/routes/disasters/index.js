@@ -295,7 +295,7 @@ router.get("/all-disasters", checkAuth, async (req, res) => {
 
     const allDisasters = disastersSnapshot.docs.map((doc) => {
       const data = doc.data();
-      const createdAt = data.createdAt.toDate();
+      const createdAt = new Date(data.createdAt);
       const now = new Date();
       const hoursPassed = Math.floor((now - createdAt) / (1000 * 60 * 60));
 
@@ -329,7 +329,7 @@ router.get("/user-destructions", checkAuth, async (req, res) => {
       .get();
     const allDisasters = disastersSnapshot.docs.map((doc) => {
       const data = doc.data();
-      const createdAt = data.createdAt.toDate();
+      const createdAt = new Date(data.createdAt);
       const now = new Date();
       const hoursPassed = Math.floor((now - createdAt) / (1000 * 60 * 60));
       const time = `Ended: ${hoursPassed} hour${
