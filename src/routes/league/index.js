@@ -21,7 +21,7 @@ async function setDefaultStatsValue({
   await leagueStatsRef.set({
     leagueId,
     userId,
-    lastLogined: lastLogined || "",
+    ...(lastLogined ? { lastLogined: lastLogined } : {}),
     coins: coins || 200,
     ecoPoints: ecoPoints || 100,
     electricity: electricity || 100,
@@ -72,7 +72,7 @@ async function getLeaguesWithPointsV1(snapshot) {
   return leagues;
 }
 
-async function getLeaguesWithPoints(snapshot) {
+async function getLeaguesWithPoints(snapshot, userID) {
   const leagues = [];
   for (const doc of snapshot.docs) {
     const leagueData = doc.data();
@@ -86,9 +86,7 @@ async function getLeaguesWithPoints(snapshot) {
 
     const userPoints = pointsSnapshot.docs.map((pointsDoc) => ({
       userID: pointsDoc.data().userId,
-      lastLogined: pointsDoc.data().lastLogined
-        ? pointsDoc.data().lastLogined.toDate().toISOString()
-        : "",
+      lastLogined: pointsDoc.data().lastLogined || "",
       ecoPoints: pointsDoc.data().ecoPoints || 0,
       pointsDoc: pointsDoc.data(),
     }));
@@ -99,6 +97,9 @@ async function getLeaguesWithPoints(snapshot) {
     );
     const userPresent = leagueData.userIDs.length;
     const averagePoints = userPresent ? totalPoints / userPresent : 0;
+    const requeatedUser = userID
+      ? userPoints.find((user) => user.userID === userID)
+      : "N/A";
 
     leagues.push({
       id: doc.id,
@@ -109,7 +110,7 @@ async function getLeaguesWithPoints(snapshot) {
         createdBy: leagueData.createdBy,
         joiningCode: leagueData.joiningCode,
         isPrivate: leagueData.isPrivate,
-        lastLogined: userPoints[0]?.lastLogined || "",
+        lastLogined: requeatedUser?.lastLogined || "",
       },
       averageEcoPoints: averagePoints,
       // userPoints,
@@ -192,7 +193,7 @@ router.get("/my-leagues", checkAuth, async (req, res) => {
         );
     }
 
-    const leagues = await getLeaguesWithPoints(snapshot);
+    const leagues = await getLeaguesWithPoints(snapshot, userID);
     // const league = snapshot.docs[0];
     const leaguesForUI = leagues.map((league) => ({
       name: league.data.leagueName,

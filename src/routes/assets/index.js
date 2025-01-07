@@ -86,6 +86,15 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
       }
       const userPoints = userDoc.data();
 
+      let ecoPoints =
+        (userPoints.ecoPoints || 0) + (buildData?.ecoEarning || 0) * noOfDays;
+
+      if (buildData.id === 1) {
+        ecoPoints -= Math.floor(Math.random() * 11) + 5; // Subtract random value between 5 and 15
+      } else {
+        ecoPoints -= (buildData?.ecoPoints || 0) * noOfDays;
+      }
+
       const coinCalculation = increaseStats
         ? (buildData?.earning || 0) * noOfDays +
           (userPoints?.coins - buildData.taxIncome * noOfDays)
@@ -93,8 +102,7 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
 
       pointsData = {
         coins: coinCalculation,
-        ecoPoints:
-          userPoints.ecoPoints - (buildData?.ecoPoints || 0) * noOfDays,
+        ecoPoints,
         electricity:
           userPoints.electricity - buildData.electricityConsumption * noOfDays,
         garbage: userPoints.garbage + buildData.wasteProduce * noOfDays,
@@ -122,6 +130,15 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
 
       const leagueStats = leagueStatsDoc.docs[0].data();
 
+      let ecoPoints =
+        (leagueStats.ecoPoints || 0) + (buildData?.ecoEarning || 0) * noOfDays;
+
+      if (buildData.id === 1) {
+        ecoPoints -= Math.floor(Math.random() * 11) + 5; // Subtract random value between 5 and 15
+      } else {
+        ecoPoints -= (buildData?.ecoPoints || 0) * noOfDays;
+      }
+
       const coinCalculation = increaseStats
         ? (buildData?.earning || 0) * noOfDays +
           (leagueStats?.coins - buildData.taxIncome * noOfDays)
@@ -129,8 +146,7 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
 
       pointsData = {
         coins: coinCalculation,
-        ecoPoints:
-          leagueStats.ecoPoints - (buildData?.ecoPoints || 0) * noOfDays,
+        ecoPoints,
         electricity:
           leagueStats.electricity - buildData.electricityConsumption * noOfDays,
         garbage: leagueStats.garbage + buildData.wasteProduce * noOfDays,
