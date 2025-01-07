@@ -35,8 +35,8 @@ async function setDefaultStatsValue({
   await leagueStatsRef.set({
     leagueId,
     userId,
-    lastLogined: lastLogined || "",
-    coins: coins || 200,
+    ...(lastLogined ? { lastLogined: lastLogined } : {}),
+    coins: coins || 5000,
     ecoPoints: ecoPoints || 100,
     electricity: electricity || 100,
     garbage: garbage || 0,
@@ -186,7 +186,7 @@ router.get("/:leagueID", checkAuth, async (req, res) => {
     snapshot.docs.forEach((doc) => {
       const docRef = leagueStatsRef.doc(doc.id);
       batch.update(docRef, {
-        lastLogined: admin.firestore.FieldValue.serverTimestamp(),
+        lastLogined: new Date().toISOString(),
       });
     });
     await batch.commit();

@@ -145,7 +145,7 @@ app.get("/user-details", checkAuth, async (req, res) => {
     // for single user
     if (!userPointsDoc.exists) {
       await userPointsRef.set({
-        coins: 1000,
+        coins: 5000,
         ecoPoints: 100,
         electricity: 100,
         garbage: 0,
