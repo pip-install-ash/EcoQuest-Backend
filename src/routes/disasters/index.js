@@ -355,7 +355,6 @@ router.get("/user-destructions", checkAuth, async (req, res) => {
   try {
     const userId = req.user.user_id;
     const { leagueId } = req.query;
-    console.log("userID>>>", userId);
 
     const disastersSnapshot = await admin
       .firestore()

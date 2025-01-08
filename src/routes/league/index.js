@@ -22,7 +22,7 @@ async function setDefaultStatsValue({
     leagueId,
     userId,
     ...(lastLogined ? { lastLogined: lastLogined } : {}),
-    coins: coins || 200,
+    coins: coins || 5000,
     ecoPoints: ecoPoints || 100,
     electricity: electricity || 100,
     garbage: garbage || 0,
@@ -424,6 +424,7 @@ router.post("/join-private-league", checkAuth, async (req, res) => {
     }
 
     const leagueDoc = snapshot.docs[0];
+    const leagueId = leagueDoc.id;
     const leagueData = leagueDoc.data();
 
     if (leagueData.userIDs.includes(userID)) {
@@ -443,7 +444,7 @@ router.post("/join-private-league", checkAuth, async (req, res) => {
     });
 
     await setDefaultStatsValue({
-      leagueId: leaguesRef.id,
+      leagueId: leagueId,
       userId: userID,
       createdAt: new Date().toISOString(),
     });
@@ -589,7 +590,6 @@ router.get("/details/:leagueID", checkAuth, async (req, res) => {
         userID,
       ];
     });
-    console.log("League Data>>", leagueData);
 
     const userData = await Promise.all(userPointsPromises);
 
