@@ -194,7 +194,13 @@ router.post("/send-coins/:coinsRequestID", checkAuth, async (req, res) => {
 
     return res
       .status(200)
-      .json(createResponse(true, "Resources transferred successfully"));
+      .json(
+        createResponse(
+          true,
+          "Resources transferred successfully",
+          senderUserData
+        )
+      );
   } catch (error) {
     console.error("Error transferring resources:", error);
     return res.status(500).json(createResponse(false, "Internal server error"));
