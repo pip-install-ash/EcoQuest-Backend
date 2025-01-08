@@ -78,7 +78,12 @@ router.get("/random-disaster", checkAuth, async (req, res) => {
     if (buildingIds.length === 0) {
       return res
         .status(400)
-        .json(createResponse(false, "No valid building IDs found"));
+        .json(
+          createResponse(
+            false,
+            "No valid building IDs found. All assets are destroyed already."
+          )
+        );
     }
 
     // Fetch building details from Firestore using the building IDs
@@ -157,6 +162,35 @@ router.get("/random-disaster", checkAuth, async (req, res) => {
   } catch (error) {
     // Handle any errors that occur during the process
     console.error("Error getting random disaster:", error);
+    res
+      .status(500)
+      .json(createResponse(false, "An error occurred", error.message));
+  }
+});
+
+router.get("/restore-all-assets", checkAuth, async (req, res) => {
+  try {
+    const allAssetsSnapshot = await admin
+      .firestore()
+      .collection("userAssets")
+      .get();
+    const batch = admin.firestore().batch();
+
+    allAssetsSnapshot.docs.forEach((doc) => {
+      const assetRef = admin.firestore().collection("userAssets").doc(doc.id);
+      batch.update(assetRef, { isDestroyed: false });
+    });
+
+    await batch.commit();
+
+    res.json(
+      createResponse(
+        true,
+        "All assets have been restored. Is Destriyeed is false now"
+      )
+    );
+  } catch (error) {
+    console.error("Error restoring all assets:", error);
     res
       .status(500)
       .json(createResponse(false, "An error occurred", error.message));
