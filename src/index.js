@@ -339,9 +339,181 @@ const scheduleRandomChallenge = () => {
   });
 };
 
+const runDailyCronJob = () => {
+  cron.schedule(
+    "0 3 * * *",
+    async () => {
+      console.log("Running daily cron job at 3 AM UK time...");
+
+      try {
+        const usersSnapshot = await admin
+          .firestore()
+          .collection("userAssets")
+          .get();
+
+        const noOfDays = 1; // Replace with actual number of days
+        const data = [];
+
+        const userAssets = usersSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        for (const userAsset of userAssets) {
+          console.log("first userAsset", userAsset);
+          const calculatedPoints = await calculateUserPoints(
+            userAsset.userId,
+            userAsset.buildingId,
+            userAsset?.leagueId,
+            noOfDays
+          );
+          data.push(calculatedPoints);
+        }
+
+        console.log("Calculated points data:", data);
+      } catch (error) {
+        console.error("Error running daily cron job:", error);
+      }
+    },
+    {
+      timezone: "Europe/London",
+    }
+  );
+};
+
+runDailyCronJob();
 scheduleRandomChallenge();
 
 // Start the server
 server.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
+
+const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
+  try {
+    const increaseStats = noOfDays;
+    // If noOfDays is not provided, set it to 1
+    noOfDays = noOfDays || 1;
+
+    // Fetch building document
+    const buildingDoc = await admin
+      .firestore()
+      .collection("buildings")
+      .doc(`${buildingId}`)
+      .get();
+    const buildData = buildingDoc.data();
+
+    let pointsData;
+
+    if (!leagueId) {
+      const userDocRef = admin.firestore().collection("userPoints").doc(userId);
+      const userDoc = await userDocRef.get();
+      if (!userDoc?.exists) {
+        console.error("User document not found");
+        return;
+      }
+      const userPoints = userDoc.data();
+
+      let ecoPoints =
+        (userPoints.ecoPoints || 0) + (buildData?.ecoEarning || 0) * noOfDays;
+
+      if (buildData.id === 1) {
+        ecoPoints -= Math.floor(Math.random() * 11) + 5; // Subtract random value between 5 and 15
+      } else {
+        // ecoPoints -= (buildData?.ecoPoints || 0) * noOfDays;
+      }
+
+      const coinCalculation = increaseStats
+        ? (buildData?.earning || 0) * noOfDays +
+          (userPoints?.coins -
+            buildData?.taxIncome *
+              noOfDays *
+              (buildData?.residentCapacity || 0) -
+            (buildData?.maintenanceCost || 0) * noOfDays)
+        : userPoints?.coins -
+          (buildData?.cost +
+            buildData?.taxIncome * (buildData?.residentCapacity || 0));
+      console.log("Coin Calculation: >>", coinCalculation);
+
+      pointsData = {
+        coins: coinCalculation,
+        ecoPoints,
+        electricity:
+          (userPoints.electricity || 0) +
+          (buildData?.eleEarning || 0) * noOfDays -
+          buildData.electricityConsumption * noOfDays,
+        garbage:
+          userPoints.garbage +
+          (buildData?.wasteProduce || 0) * noOfDays -
+          (buildData?.wasteRemoval || 0) * noOfDays,
+        water:
+          (userPoints.water || 0) +
+          (buildData?.waterEarning || 0) * noOfDays -
+          buildData.waterUsage * noOfDays,
+      };
+
+      if (!increaseStats) {
+        pointsData.population =
+          userPoints.population + buildData?.residentCapacity * noOfDays;
+      }
+
+      await userDocRef.update(pointsData);
+    } else {
+      const leagueStatsRef = admin.firestore().collection("leagueStats");
+      const leagueStatsDoc = await leagueStatsRef
+        .where("leagueId", "==", leagueId)
+        .where("userId", "==", userId)
+        .limit(1)
+        .get();
+
+      if (leagueStatsDoc.empty) {
+        console.error("League stats document not found");
+        return;
+      }
+
+      const leagueStats = leagueStatsDoc.docs[0].data();
+      console.log(leagueStats.ecoPoints, "buildData", buildData);
+
+      let ecoPoints =
+        (leagueStats.ecoPoints || 0) + (buildData?.ecoEarning || 0) * noOfDays;
+
+      if (buildData.id === 1) {
+        ecoPoints -= Math.floor(Math.random() * 11) + 5; // Subtract random value between 5 and 15
+      } else {
+        ecoPoints -= (buildData?.ecoPoints || 0) * noOfDays;
+      }
+
+      const coinCalculation = increaseStats
+        ? (buildData?.earning || 0) * noOfDays +
+          (leagueStats?.coins - buildData?.taxIncome * noOfDays)
+        : leagueStats?.coins - (buildData.cost + buildData?.taxIncome);
+
+      pointsData = {
+        coins: coinCalculation,
+        ecoPoints,
+        electricity:
+          leagueStats.electricity +
+          (buildData?.eleEarning || 0) * noOfDays -
+          buildData.electricityConsumption * noOfDays,
+        garbage:
+          leagueStats.garbage +
+          (buildData?.wasteProduce || 0) * noOfDays -
+          (buildData?.wasteRemoval || 0) * noOfDays,
+        water:
+          leagueStats.water +
+          (buildData?.waterEarning || 0) * noOfDays -
+          buildData.waterUsage * noOfDays,
+      };
+
+      if (!increaseStats) {
+        pointsData.population =
+          leagueStats.population + buildData?.residentCapacity * noOfDays;
+      }
+
+      await leagueStatsDoc.docs[0].ref.update(pointsData);
+    }
+    return pointsData;
+  } catch (error) {
+    console.error("Error calculating user points:", error);
+  }
+};

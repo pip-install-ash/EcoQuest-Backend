@@ -86,6 +86,7 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
       }
       const userPoints = userDoc.data();
 
+      //coEarning can be negative
       let ecoPoints =
         (userPoints.ecoPoints || 0) + (buildData?.ecoEarning || 0) * noOfDays;
 
@@ -98,9 +99,8 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
       const coinCalculation = increaseStats
         ? (buildData?.earning || 0) * noOfDays +
           (userPoints?.coins -
-            buildData?.taxIncome *
-              noOfDays *
-              (buildData?.residentCapacity || 0) -
+            (buildData?.taxIncome * buildData?.residentCapacity || 0) *
+              noOfDays -
             (buildData?.maintenanceCost || 0) * noOfDays)
         : userPoints?.coins -
           (buildData?.cost +
