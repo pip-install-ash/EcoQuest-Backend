@@ -13,18 +13,19 @@ router.get("/all-notifications", checkAuth, async (req, res) => {
     }
 
     const notificationsRef = admin.firestore().collection("notifications");
-    const globalNotificationsSnapshot = await notificationsRef
-      .where("isGlobal", "==", true)
-      .get();
-    const userNotificationsSnapshot = await notificationsRef
-      .where("userID", "==", userId)
-      .get();
+    const [globalNotificationsSnapshot, userNotificationsSnapshot] =
+      await Promise.all([
+        notificationsRef.where("isGlobal", "==", true).get(),
+        notificationsRef.where("userID", "==", userId).get(),
+      ]);
 
     const notifications = [];
+    let disasterCount = 0;
+    const disasterMessage =
+      "There have been a disaster! Run back to your city and save your civilians";
 
     const calculateTimeAgo = (date) => {
-      const now = new Date();
-      const diff = now - date;
+      const diff = new Date() - date;
       const minutes = Math.floor(diff / 60000);
       const hours = Math.floor(minutes / 60);
       const days = Math.floor(hours / 24);
@@ -36,47 +37,61 @@ router.get("/all-notifications", checkAuth, async (req, res) => {
     };
 
     const formatResourcesReceivedMessage = (message) => {
-      const parts = message.match(
+      const match = message.match(
         /Resources received: (\d+) GOLD, (\d+)KW, (\d+) LITER, from (.+)/
       );
-      if (parts) {
-        const [_, gold, kw, liter, from] = parts;
-        return `Resource received : <span style='color: #E99A45;'>+${gold} gold</span>, <span style='color: #1e90ff;'>+${kw}KW</span>, ${liter} LITER, from<br>(${from})`;
-      }
-      return message;
+      return match
+        ? `Resource received : <span style='color: #E99A45;'>+${match[1]} gold</span>, <span style='color: #1e90ff;'>+${match[2]}KW</span>, ${match[3]} LITER, from<br>(${match[4]})`
+        : message;
     };
 
-    const formatChallengeMessage = (message) => {
-      return `New echo challenge: Complete the challenge to get <span style='color: #10EE1A;'>+20 coins</span> reward.`;
+    const processNotifications = (snapshot) => {
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const { notificationType, message, createdAt } = data;
+
+        if (notificationType === "disaster" && message === disasterMessage) {
+          disasterCount++;
+          return;
+        }
+
+        if (notificationType === "challenge" && !isToday(createdAt)) {
+          return;
+        }
+
+        notifications.push({
+          notificationType,
+          message:
+            notificationType === "challenge"
+              ? "New echo challenge: Complete the challenge to get <span style='color: #10EE1A;'>+20 coins</span> reward."
+              : notificationType === "resourcesReceived"
+              ? formatResourcesReceivedMessage(message)
+              : message,
+          time: calculateTimeAgo(new Date(createdAt)),
+        });
+      });
     };
 
-    globalNotificationsSnapshot.forEach((doc) => {
-      const data = doc.data();
-      notifications.push({
-        notificationType: data.notificationType,
-        message:
-          data.notificationType === "resourcesReceived"
-            ? formatResourcesReceivedMessage(data.message)
-            : data.notificationType === "challenge"
-            ? formatChallengeMessage(data.message)
-            : data.message,
-        time: calculateTimeAgo(new Date(data.createdAt)),
-      });
-    });
+    const isToday = (date) => {
+      const today = new Date();
+      const notificationDate = new Date(date);
+      return (
+        today.getDate() === notificationDate.getDate() &&
+        today.getMonth() === notificationDate.getMonth() &&
+        today.getFullYear() === notificationDate.getFullYear()
+      );
+    };
 
-    userNotificationsSnapshot.forEach((doc) => {
-      const data = doc.data();
-      notifications.push({
-        notificationType: data.notificationType,
-        message:
-          data.notificationType === "resourcesReceived"
-            ? formatResourcesReceivedMessage(data.message)
-            : data.notificationType === "challenge"
-            ? formatChallengeMessage(data.message)
-            : data.message,
-        time: calculateTimeAgo(new Date(data.createdAt)),
+    processNotifications(globalNotificationsSnapshot);
+    processNotifications(userNotificationsSnapshot);
+
+    if (disasterCount > 0) {
+      notifications.unshift({
+        notificationType: "disaster",
+        message: `There have been disasters! (${disasterCount} occurrences in the last 7 days)`,
+        time: "Last 7 days",
       });
-    });
+    }
 
     return res
       .status(200)

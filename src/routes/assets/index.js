@@ -92,13 +92,20 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
       if (buildData.id === 1) {
         ecoPoints -= Math.floor(Math.random() * 11) + 5; // Subtract random value between 5 and 15
       } else {
-        ecoPoints -= (buildData?.ecoPoints || 0) * noOfDays;
+        // ecoPoints -= (buildData?.ecoPoints || 0) * noOfDays;
       }
 
       const coinCalculation = increaseStats
         ? (buildData?.earning || 0) * noOfDays +
-          (userPoints?.coins - buildData.taxIncome * noOfDays)
-        : userPoints?.coins - (buildData.cost + buildData.taxIncome);
+          (userPoints?.coins -
+            buildData?.taxIncome *
+              noOfDays *
+              (buildData?.residentCapacity || 0) -
+            (buildData?.maintenanceCost || 0) * noOfDays)
+        : userPoints?.coins -
+          (buildData?.cost +
+            buildData?.taxIncome * (buildData?.residentCapacity || 0));
+      console.log("Coin Calculation: >>", coinCalculation);
 
       pointsData = {
         coins: coinCalculation,
@@ -119,7 +126,7 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
 
       if (!increaseStats) {
         pointsData.population =
-          userPoints.population + buildData.residentCapacity * noOfDays;
+          userPoints.population + buildData?.residentCapacity * noOfDays;
       }
 
       await userDocRef.update(pointsData);
@@ -150,8 +157,8 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
 
       const coinCalculation = increaseStats
         ? (buildData?.earning || 0) * noOfDays +
-          (leagueStats?.coins - buildData.taxIncome * noOfDays)
-        : leagueStats?.coins - (buildData.cost + buildData.taxIncome);
+          (leagueStats?.coins - buildData?.taxIncome * noOfDays)
+        : leagueStats?.coins - (buildData.cost + buildData?.taxIncome);
 
       pointsData = {
         coins: coinCalculation,
@@ -172,7 +179,7 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
 
       if (!increaseStats) {
         pointsData.population =
-          leagueStats.population + buildData.residentCapacity * noOfDays;
+          leagueStats.population + buildData?.residentCapacity * noOfDays;
       }
 
       await leagueStatsDoc.docs[0].ref.update(pointsData);

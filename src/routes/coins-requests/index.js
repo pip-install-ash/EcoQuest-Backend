@@ -191,16 +191,22 @@ router.post("/send-coins/:coinsRequestID", checkAuth, async (req, res) => {
       createdAt: new Date().toISOString(),
     };
     await admin.firestore().collection("notifications").add(notificationDoc);
+    // const updatedSenderUserData = (
+    //   await admin
+    //     .firestore()
+    //     .collection("leagueStats")
+    //     .where("userId", "==", senderID)
+    //     .where("leagueId", "==", leagueID)
+    //     .get()
+    // ).docs[0].data();
 
-    return res
-      .status(200)
-      .json(
-        createResponse(
-          true,
-          "Resources transferred successfully",
-          senderUserData
-        )
-      );
+    return res.status(200).json(
+      createResponse(
+        true,
+        "Resources transferred successfully"
+        // updatedSenderUserData
+      )
+    );
   } catch (error) {
     console.error("Error transferring resources:", error);
     return res.status(500).json(createResponse(false, "Internal server error"));
