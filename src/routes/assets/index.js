@@ -90,7 +90,7 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
       let ecoPoints =
         (userPoints.ecoPoints || 0) + (buildData?.ecoEarning || 0) * noOfDays;
 
-      if (buildData.id === 1) {
+      if (buildingId === 1) {
         ecoPoints -= Math.floor(Math.random() * 11) + 5; // Subtract random value between 5 and 15
       } else {
         // ecoPoints -= (buildData?.ecoPoints || 0) * noOfDays;
@@ -149,7 +149,7 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
       let ecoPoints =
         (leagueStats.ecoPoints || 0) + (buildData?.ecoEarning || 0) * noOfDays;
 
-      if (buildData.id === 1) {
+      if (buildingId === 1) {
         ecoPoints -= Math.floor(Math.random() * 11) + 5; // Subtract random value between 5 and 15
       } else {
         ecoPoints -= (buildData?.ecoPoints || 0) * noOfDays;
@@ -293,14 +293,44 @@ router.delete("/user/assets", checkAuth, async (req, res) => {
     .where("userId", "==", req.user.user_id)
     .where("buildingId", "==", buildingId)
     .where("leagueId", "==", leagueId || "")
+
     .limit(1) // Limit to only one document
     .get()
-    .then((snapshot) => {
+    .then(async (snapshot) => {
       if (snapshot.empty) {
         return res.status(404).json(createResponse(false, "Asset not found"));
       }
 
       const doc = snapshot.docs[0];
+      // doc.data();
+
+      if (doc.data().isDestroyed) {
+        const buildRemovalCost = 200;
+        if (leagueId) {
+          const leagueStatsRef = admin
+            .firestore()
+            .collection("leagueStats")
+            .where("userId", "==", req.user.user_id)
+            .where("leagueId", "==", leagueId);
+          const leagueStatsSnapshot = await leagueStatsRef.get();
+
+          if (!leagueStatsSnapshot.empty) {
+            const leagueStatsDoc = leagueStatsSnapshot.docs[0];
+            await leagueStatsDoc.ref.update({
+              coins: admin.firestore.FieldValue.increment(-buildRemovalCost),
+            });
+          }
+        } else {
+          const userPointsRef = admin
+            .firestore()
+            .collection("userPoints")
+            .doc(req.user.user_id);
+          await userPointsRef.update({
+            coins: admin.firestore.FieldValue.increment(-buildRemovalCost),
+          });
+        }
+      }
+
       return doc.ref.delete().then(async () => {
         return res.status(200).json(createResponse(true, "Asset deleted"));
       });
