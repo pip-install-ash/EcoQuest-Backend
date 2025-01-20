@@ -47,7 +47,7 @@ const createChallenge = async () => {
   // Select a random challenge
   const randomChallenge =
     challenges[Math.floor(Math.random() * challenges.length)];
-  const randomCount = Math.floor(Math.random() * 9) + 1;
+  const randomCount = Math.floor(Math.random() * 5) + 1; // Random count between 1 and 5
   // Define the startTime and endTime
   const startTime = new Date().toISOString();
   const endTime = new Date(new Date().getTime() + 15 * 60 * 1000).toISOString(); // 15 minutes after startTime
