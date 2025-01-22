@@ -62,7 +62,7 @@ const createChallenge = async () => {
       buildingID: randomChallenge.buildingID,
       count: randomCount,
     },
-    points: 200, // Example reward points
+    points: 2000, // Example reward points
     isEnded: false,
   };
 
@@ -145,7 +145,7 @@ const createChallenge = async () => {
     // Create the notification document
     const notificationDoc = {
       message:
-        "New eco challenge! Complete the challenge to get 200 coins reward",
+        "New eco challenge! Complete the challenge to get 2000 coins reward",
       notificationType: "challenge",
       isGlobal: true,
       userID: null,
