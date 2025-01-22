@@ -36,7 +36,7 @@ async function setDefaultStatsValue({
     leagueId,
     userId,
     ...(lastLogined ? { lastLogined: lastLogined } : {}),
-    coins: coins || 5000,
+    coins: coins || 25000,
     ecoPoints: ecoPoints || 100,
     electricity: electricity || 100,
     garbage: garbage || 0,

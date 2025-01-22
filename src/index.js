@@ -145,7 +145,7 @@ app.get("/user-details", checkAuth, async (req, res) => {
     // for single user
     if (!userPointsDoc.exists) {
       await userPointsRef.set({
-        coins: 5000,
+        coins: 25000,
         ecoPoints: 100,
         electricity: 100,
         garbage: 0,
@@ -202,6 +202,33 @@ app.use("/api/disasters", disasterRoutes);
 app.use("/api/notifications", notificationsRoutes);
 app.use("/api/chat", chatRoutes);
 
+app.get("/update-coins", async (req, res) => {
+  try {
+    const coinsCount = !!req.query.coins ? parseInt(req.query.coins, 10) : null;
+
+    const userPointsSnapshot = await admin
+      .firestore()
+      .collection("userPoints")
+      .get();
+    const batch = admin.firestore().batch();
+
+    userPointsSnapshot.forEach((doc) => {
+      const userPointsRef = admin
+        .firestore()
+        .collection("userPoints")
+        .doc(doc.id);
+      batch.update(userPointsRef, { coins: coinsCount || 25000 });
+    });
+
+    await batch.commit();
+    res
+      .status(200)
+      .json({ message: "Coins updated to 25000 for all users", success: true });
+  } catch (error) {
+    console.error("Error updating coins:", error);
+    res.status(500).json({ message: error.message, success: false });
+  }
+});
 // Socket.IO connection handling
 io.on("connection", (socket) => {
   console.log("A user connected:", socket.id);
