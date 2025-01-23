@@ -147,11 +147,11 @@ app.get("/user-details", checkAuth, async (req, res) => {
       await userPointsRef.set({
         coins: 25000,
         ecoPoints: 100,
-        electricity: 100,
+        electricity: 200,
         garbage: 0,
         population: 0,
         userId: user.user_id,
-        water: 100,
+        water: 1000,
       });
     }
     await admin
