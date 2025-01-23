@@ -432,6 +432,19 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
 
     let pointsData;
 
+    const calculateEmploymentEarnings = (
+      currentPopulation,
+      buildingData,
+      noOfDays
+    ) => {
+      if (!buildingData.effect) return 0;
+      return (
+        Math.min(currentPopulation, buildingData.jobCapacity || 0) *
+        buildingData.effect *
+        noOfDays
+      );
+    };
+
     if (!leagueId) {
       const userDocRef = admin.firestore().collection("userPoints").doc(userId);
       const userDoc = await userDocRef.get();
@@ -450,8 +463,17 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
         // ecoPoints -= (buildData?.ecoPoints || 0) * noOfDays;
       }
 
+      const employmentEarnings = calculateEmploymentEarnings(
+        userPoints.population || 0,
+        buildData,
+        noOfDays
+      );
+
+      console.log("Employment Earnings: >>", employmentEarnings);
+
       const coinCalculation = increaseStats
         ? (buildData?.earning || 0) * noOfDays +
+          employmentEarnings +
           (userPoints?.coins -
             buildData?.taxIncome *
               noOfDays *
@@ -510,8 +532,17 @@ const calculateUserPoints = async (userId, buildingId, leagueId, noOfDays) => {
         ecoPoints -= (buildData?.ecoPoints || 0) * noOfDays;
       }
 
+      const employmentEarnings = calculateEmploymentEarnings(
+        leagueStats.population || 0,
+        buildData,
+        noOfDays
+      );
+
+      console.log("Employment Earnings: >>", employmentEarnings);
+
       const coinCalculation = increaseStats
         ? (buildData?.earning || 0) * noOfDays +
+          employmentEarnings +
           (leagueStats?.coins - buildData?.taxIncome * noOfDays)
         : leagueStats?.coins - (buildData.cost + buildData?.taxIncome);
 
